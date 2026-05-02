@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xyz-manager"
+version = "0.1.0"
+description = "Universal dependency manager TUI — one terminal, every package manager."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Minsu Kim", email = "kimminsu@oregonstate.edu" },
+    { name = "Adithya Nair", email = "nairadi@oregonstate.edu" },
+    { name = "Ryan Shankar", email = "shankary@oregonstate.edu" },
+]
+dependencies = [
+    "textual>=3.0",
+    "google-genai>=1.0",
+]
+
+[project.scripts]
+xyz = "xyz.app:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["xyz*"]
