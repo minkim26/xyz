@@ -59,7 +59,6 @@ def _parse_package_list(response: str, valid_names: list[str]) -> list[str]:
     # Strip markdown code fences if Gemini wraps the response
     text = response.strip()
     if text.startswith("```"):
-        # Remove opening ```json or ``` and closing ```
         lines = text.split("\n")
         lines = [line for line in lines if not line.strip().startswith("```")]
         text = "\n".join(lines).strip()

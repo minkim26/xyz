@@ -50,7 +50,7 @@ class GeminiClient:
                 self._client = None
         else:
             logger.info(
-                "No GEMINI_API_KEY found — AI features disabled. "
+                "No GEMINI_API_KEY found -- AI features disabled. "
                 "Set the GEMINI_API_KEY environment variable to enable."
             )
 
@@ -65,7 +65,7 @@ class GeminiClient:
 
     @classmethod
     def reset(cls) -> None:
-        """Reset the singleton — mainly useful for testing."""
+        """Reset the singleton -- mainly useful for testing."""
         cls._instance = None
 
     # -- Public API ----------------------------------------------------------
@@ -89,7 +89,7 @@ class GeminiClient:
         """
         if not self.is_available:
             return (
-                "🔑 AI features are offline.\n"
+                "AI features are offline.\n"
                 "Set the GEMINI_API_KEY environment variable to enable "
                 "package explanations."
             )
@@ -105,7 +105,7 @@ class GeminiClient:
             )
             text = response.text
             if not text:
-                return "⚠️ Gemini returned an empty response. Try again."
+                return "Gemini returned an empty response. Try again."
             return text.strip()
 
         except Exception as exc:
@@ -113,13 +113,13 @@ class GeminiClient:
             if "rate" in error_str or "quota" in error_str or "429" in error_str:
                 logger.warning("Gemini rate limit hit: %s", exc)
                 return (
-                    "⏳ Rate limit reached — please wait a moment and try again."
+                    "Rate limit reached -- please wait a moment and try again."
                 )
             if "api key" in error_str or "401" in error_str or "403" in error_str:
                 logger.error("Gemini auth error: %s", exc)
                 return (
-                    "🔑 Invalid API key. Check your GEMINI_API_KEY "
+                    "Invalid API key. Check your GEMINI_API_KEY "
                     "environment variable."
                 )
             logger.exception("Gemini API error")
-            return f"⚠️ AI request failed: {exc}"
+            return f"AI request failed: {exc}"

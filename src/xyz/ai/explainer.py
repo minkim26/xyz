@@ -1,4 +1,4 @@
-"""Package explainer — Gemini-powered plain-English package descriptions.
+"""Package explainer -- Gemini-powered plain-English package descriptions.
 
 When a user selects a package in the TUI, this module asks Gemini to
 explain what it does, why it's installed, and whether it's safe to remove.
@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 # Simple in-memory cache: (name, manager) -> explanation text
 _cache: dict[tuple[str, str], str] = {}
+
+# Error prefixes used by client.py -- don't cache these
+_ERROR_PREFIXES = ("AI features", "Gemini returned", "Rate limit", "Invalid API", "AI request")
 
 
 async def explain_package(
@@ -49,12 +52,12 @@ async def explain_package(
     result = await client.generate(prompt)
 
     # Only cache successful responses (not error messages)
-    if not result.startswith(("\ud83d\udd11", "\u26a0\ufe0f", "\u23f3")):
+    if not result.startswith(_ERROR_PREFIXES):
         _cache[cache_key] = result
 
     return result
 
 
 def clear_cache() -> None:
-    """Clear the explanation cache — useful for testing."""
+    """Clear the explanation cache -- useful for testing."""
     _cache.clear()
