@@ -630,6 +630,23 @@ class XYZApp(App):
         self._mount_pills()
         self._apply_filters()
 
+    async def _reload_packages(self) -> None:
+        """Re-scan all package managers and refresh the UI in the background."""
+        self.notify("Refreshing package list…", title="Refresh", timeout=2)
+        packages = await self._managers_registry.scan_all()
+        self._all_packages = packages
+        new_managers = sorted({p.manager for p in packages})
+        name_counts = Counter(p.name for p in packages)
+        self._dupe_names = {n for n, c in name_counts.items() if c > 1}
+
+        container = self.query_one("#manager-pills")
+        for manager in new_managers:
+            if manager not in self._managers:
+                container.mount(Button(manager, id=f"pill-{manager}", classes="manager-pill"))
+        self._managers = new_managers
+
+        self._apply_filters()
+
     def _mount_pills(self) -> None:
         container = self.query_one("#manager-pills")
         for manager in self._managers:
@@ -921,6 +938,7 @@ class XYZApp(App):
             success, output = await self._managers_registry.update(pkg)
             if success:
                 self.notify(f"Successfully updated {pkg.name}\n[dim]{output}[/dim]", title="Update Success")
+                self.run_worker(self._reload_packages())
             else:
                 self.notify(f"Failed to update {pkg.name}\n{output}", title="Update Error", severity="error")
 
@@ -944,6 +962,7 @@ class XYZApp(App):
                 self.notify(f"Successfully deleted {pkg.name}\n[dim]{output}[/dim]", title="Delete Success")
                 self._all_packages = [p for p in self._all_packages if not (p.name == pkg.name and p.manager == pkg.manager)]
                 self._apply_filters()
+                self.run_worker(self._reload_packages())
             else:
                 self.notify(f"Failed to delete {pkg.name}\n{output}", title="Delete Error", severity="error")
 
@@ -996,6 +1015,7 @@ class XYZApp(App):
                     if not (p.name == pkg.name and p.manager == pkg.manager)
                 ]
                 self._apply_filters()
+                self.run_worker(self._reload_packages())
             else:
                 self.notify(f"Failed to delete {pkg.name}\n{output}", title="Delete Error", severity="error")
 
