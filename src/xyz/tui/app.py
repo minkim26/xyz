@@ -276,20 +276,16 @@ class XYZApp(App):
     def _rebuild_table(self) -> None:
         table = self.query_one("#package-list", DataTable)
         table.clear()
-
-        for item in self._display_rows:
-            if item is None:
-                table.add_row("[dim]─── other packages[/dim]", "", "", "", key="__sep__")
-            else:
-                pkg = item
-                color = _mgr_color(pkg.manager)
-                table.add_row(
-                    f"{pkg.name}[dim] {pkg.version}[/dim]",
-                    f"[{color}]{pkg.manager}[/{color}]",
-                    pkg.size,
-                    _status_markup(pkg, self._dupe_names),
-                    key=pkg.name,
-                )
+        for pkg in self._filtered:
+            tag = "[yellow]orphan[/yellow]" if pkg.is_orphan else ""
+            table.add_row(
+                pkg.name,
+                pkg.manager,
+                pkg.version,
+                pkg.formatted_size(),
+                tag,
+                key=pkg.name,
+            )
 
         detail = self.query_one(DetailPane)
         real_rows = [r for r in self._display_rows if r is not None]
