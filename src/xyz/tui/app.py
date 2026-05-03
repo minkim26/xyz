@@ -91,9 +91,17 @@ class DetailPane(Widget):
         background: #3B82F6;
         border: round #3B82F6;
     }
+    #btn-detail-update:hover {
+        background: #2563EB;
+        border: round #2563EB;
+    }
     #btn-detail-remove {
         background: #DC2626;
         border: round #DC2626;
+    }
+    #btn-detail-remove:hover {
+        background: #B91C1C;
+        border: round #B91C1C;
     }
     #dp-ai-scroll {
         height: 1fr;
@@ -267,6 +275,14 @@ class XYZApp(App):
     #pill-apt    { background: #EAB308; border: round #EAB308; color: black; }
     #pill-bun    { background: #F97316; border: round #F97316; }
     #pill-pacman { background: #A855F7; border: round #A855F7; }
+
+    /* pill hover — darken each colour */
+    #pill-pip:hover    { background: #2563EB; border: round #2563EB; }
+    #pill-npm:hover    { background: #16A34A; border: round #16A34A; }
+    #pill-brew:hover   { background: #DC2626; border: round #DC2626; }
+    #pill-apt:hover    { background: #CA8A04; border: round #CA8A04; }
+    #pill-bun:hover    { background: #EA580C; border: round #EA580C; }
+    #pill-pacman:hover { background: #9333EA; border: round #9333EA; }
 
     /* ── main panels ── */
     #main-row { height: 1fr; }
