@@ -1,6 +1,6 @@
 # XYZ — Universal Dependency Manager
 
-<img src="assets/xyz-logo-dark.svg" width="320" alt="XYZ logo">
+<p align="center"><img src="assets/xyz-logo-dark.svg" width="320" alt="XYZ logo"></p>
 
 
 
