@@ -50,25 +50,25 @@ async def test_list_package_size_is_none(manager, fake_subprocess):
 async def test_update_returns_true_on_success(manager, fake_subprocess):
     with fake_subprocess("xyz.managers.pip", returncode=0):
         result = await manager.update("requests")
-    assert result is True
+    assert result == (True, "")
 
 
 async def test_update_returns_false_on_failure(manager, fake_subprocess):
     with fake_subprocess("xyz.managers.pip", returncode=1):
         result = await manager.update("requests")
-    assert result is False
+    assert result == (False, "")
 
 
 async def test_delete_returns_true_on_success(manager, fake_subprocess):
     with fake_subprocess("xyz.managers.pip", returncode=0):
         result = await manager.delete("requests")
-    assert result is True
+    assert result == (True, "")
 
 
 async def test_delete_returns_false_on_failure(manager, fake_subprocess):
     with fake_subprocess("xyz.managers.pip", returncode=1):
         result = await manager.delete("requests")
-    assert result is False
+    assert result == (False, "")
 
 
 async def test_check_orphans_stub_returns_empty(manager):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import os
 import shutil
 from datetime import datetime
@@ -38,7 +39,7 @@ class BrewManager(BaseManager):
     def is_available(self) -> bool:
         return shutil.which("brew") is not None
 
-    async def list(self) -> list[Package]:
+    async def list(self) -> builtins.list[Package]:
         stdout, _, returncode = await run_command(
             ["brew", "list", "--versions", "--formula"]
         )
@@ -66,13 +67,13 @@ class BrewManager(BaseManager):
             packages.append(Package(name=name, version=version, manager=self.name, size=None, install_date=install_date, source=source))
         return packages
 
-    async def update(self, name: str) -> bool:
-        _, _, code = await run_command(["brew", "upgrade", name])
-        return code == 0
+    async def update(self, name: str) -> tuple[bool, str]:
+        stdout, stderr, code = await run_command(["brew", "upgrade", name])
+        return code == 0, f"{stdout}\n{stderr}".strip()
 
-    async def delete(self, name: str) -> bool:
-        _, _, code = await run_command(["brew", "uninstall", name])
-        return code == 0
+    async def delete(self, name: str) -> tuple[bool, str]:
+        stdout, stderr, code = await run_command(["brew", "uninstall", name])
+        return code == 0, f"{stdout}\n{stderr}".strip()
 
     async def get_deps(self, name: str) -> tuple[list[str], list[str]]:
         import asyncio as _asyncio
@@ -84,5 +85,5 @@ class BrewManager(BaseManager):
         required_by = [x.strip() for x in uses_out.splitlines() if x.strip()]
         return requires, required_by
 
-    async def check_orphans(self) -> list[Package]:
+    async def check_orphans(self) -> builtins.list[Package]:
         return []

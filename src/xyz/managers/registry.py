@@ -42,6 +42,18 @@ class ManagerRegistry:
                 logger.warning("Manager %s scan failed: %s", manager.name, result)
         return packages
 
+    async def update(self, pkg: Package) -> tuple[bool, str]:
+        for manager in self._managers:
+            if manager.name == pkg.manager:
+                return await manager.update(pkg.name)
+        return False, f"Manager {pkg.manager} not found."
+
+    async def delete(self, pkg: Package) -> tuple[bool, str]:
+        for manager in self._managers:
+            if manager.name == pkg.manager:
+                return await manager.delete(pkg.name)
+        return False, f"Manager {pkg.manager} not found."
+
 
 def _detect_managers() -> list[BaseManager]:
     detected: list[BaseManager] = []
