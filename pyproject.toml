@@ -25,3 +25,9 @@ xyz = "xyz.app:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["xyz*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[project.optional-dependencies]
+test = ["pytest-asyncio"]
