@@ -24,6 +24,17 @@ except ImportError:
         return []
 
 
+# Breathing animation chars + matching Gemini-brand color gradient (blue→violet→fuchsia→back)
+_SPINNER_CHARS  = ["•",       "✦",       "✦",       "✧",       "✦",       "✦",       "✧",       "•"      ]
+_SPINNER_COLORS = ["#4285F4", "#6366F1", "#8B5CF6", "#A855F7", "#C026D3", "#A855F7", "#8B5CF6", "#6366F1"]
+
+# Per-letter gradient for the static header
+_GEMINI_GRAD = ["#4285F4", "#6366F1", "#8B5CF6", "#A855F7", "#C026D3", "#EC4899"]
+
+def _gemini_header() -> str:
+    parts = [f"[bold {c}]{ch}[/bold {c}]" for c, ch in zip(_GEMINI_GRAD, "GEMINI")]
+    return f"[bold #4285F4]✦[/bold #4285F4] {''.join(parts)}"
+
 MANAGER_COLORS: dict[str, str] = {
     "pip":    "#3B82F6",
     "npm":    "#22C55E",
@@ -137,12 +148,13 @@ class DetailPane(Widget):
             f"[dim]version[/dim]  {pkg.version}"
         )
 
+        header = _gemini_header()
         if ai_text:
-            ai_block = f"[bold cyan]● GEMINI[/bold cyan]\n\n{ai_text}"
+            ai_block = f"{header}\n\n{ai_text}"
         elif ai_loading:
-            ai_block = "[bold cyan]● GEMINI[/bold cyan]\n\n[dim]Loading…[/dim]"
+            ai_block = f"{header}\n\n[dim]Loading…[/dim]"
         else:
-            ai_block = "[bold cyan]● GEMINI[/bold cyan]\n\n[dim]Press 'a' for AI insights[/dim]"
+            ai_block = f"{header}\n\n[dim]Press 'a' for AI insights[/dim]"
 
         self.query_one("#dp-ai", Static).update(ai_block)
         self.query_one("#dp-actions").display = True
@@ -294,6 +306,8 @@ class XYZApp(App):
         self._manager_filter: Optional[str] = None
         self._managers: list[str] = []
         self._ai_task: Optional[asyncio.Task] = None
+        self._spinner_timer = None
+        self._spinner_frame: int = 0
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="search-row"):
@@ -407,17 +421,43 @@ class XYZApp(App):
             self._ai_task.cancel()
         self._ai_task = asyncio.create_task(self._fetch_ai(pkg))
 
+    def _start_ai_spinner(self) -> None:
+        self._spinner_frame = 0
+        if self._spinner_timer is not None:
+            self._spinner_timer.stop()
+        self._tick_spinner()
+        self._spinner_timer = self.set_interval(0.2, self._tick_spinner)
+
+    def _tick_spinner(self) -> None:
+        idx = self._spinner_frame % len(_SPINNER_CHARS)
+        char = _SPINNER_CHARS[idx]
+        color = _SPINNER_COLORS[idx]
+        self._spinner_frame += 1
+        try:
+            self.query_one("#dp-ai", Static).update(
+                f"{_gemini_header()}\n\n[bold {color}]{char}[/bold {color}] [dim]Asking Gemini…[/dim]"
+            )
+        except Exception:
+            pass
+
+    def _stop_ai_spinner(self) -> None:
+        if self._spinner_timer is not None:
+            self._spinner_timer.stop()
+            self._spinner_timer = None
+
     async def _fetch_ai(self, pkg: Package) -> None:
         try:
             if pkg.is_orphan:
                 text = await assess_orphan_risk(pkg.name, pkg.manager)
             else:
                 text = await explain_package(pkg.name, pkg.manager, pkg.version)
+            self._stop_ai_spinner()
             if self._selected and self._selected.name == pkg.name:
                 self.query_one(DetailPane).show_package(pkg, self._dupe_names, ai_text=text)
         except asyncio.CancelledError:
-            pass
+            self._stop_ai_spinner()
         except Exception as exc:
+            self._stop_ai_spinner()
             if self._selected and self._selected.name == pkg.name:
                 self.query_one(DetailPane).show_package(
                     pkg, self._dupe_names, ai_text=f"[red]Error: {exc}[/red]"
@@ -478,9 +518,8 @@ class XYZApp(App):
         if not self._selected:
             self.notify("No package selected.", severity="warning")
             return
-        self.query_one(DetailPane).show_package(
-            self._selected, self._dupe_names, ai_loading=True
-        )
+        self.query_one(DetailPane).show_package(self._selected, self._dupe_names, ai_loading=True)
+        self._start_ai_spinner()
         self._kick_ai(self._selected)
 
     def action_toggle_orphans(self) -> None:
