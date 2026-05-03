@@ -670,23 +670,25 @@ class XYZApp(App):
         query = event.value.strip()
         if not query.startswith("?"):
             return
-        
-        self.query_one(DetailPane).show_empty("Searching by intent…")
+
+        self.query_one(DetailPane).show_empty("Asking Gemini…")
         self._start_ai_spinner()
-        
+
         try:
             package_names = [p.name for p in self._all_packages]
             matches = await natural_language_search(query[1:].strip(), package_names)
-            self._stop_ai_spinner()
             matched_pkgs = [p for p in self._all_packages if p.name in matches]
             self._display_rows = matched_pkgs
             self._rebuild_table()
             self.query_one("#result-count", Label).update(f"{len(matched_pkgs)} results")
             if not matched_pkgs:
                 self.query_one(DetailPane).show_empty("No AI matches found.")
+        except asyncio.CancelledError:
+            pass
         except Exception as exc:
-            self._stop_ai_spinner()
             self.query_one(DetailPane).show_empty(f"AI search error: {exc}")
+        finally:
+            self._stop_ai_spinner()
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         btn_id = event.button.id or ""
