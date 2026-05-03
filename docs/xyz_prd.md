@@ -1,4 +1,8 @@
 # XYZ — Universal Dependency Manager
+
+<img src="../assets/xyzlogo.svg" width="320" alt="XYZ logo">
+
+
 ### Product Requirements Document
 
 | Field | Value |
