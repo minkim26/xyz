@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+from datetime import datetime
 
 from .base import BaseManager, Package
 from ._subprocess import run_command
@@ -50,7 +51,19 @@ class BrewManager(BaseManager):
                 continue
             name = parts[0]
             version = parts[-1] if len(parts) > 1 else ""
-            packages.append(Package(name=name, version=version, manager=self.name, size=None))
+            install_date = source = None
+            for base in _CELLAR_PATHS:
+                path = os.path.join(base, name, version)
+                if os.path.isdir(path):
+                    try:
+                        install_date = datetime.fromtimestamp(
+                            os.path.getmtime(path)
+                        ).strftime("%Y-%m-%d")
+                    except OSError:
+                        pass
+                    source = "brew.sh"
+                    break
+            packages.append(Package(name=name, version=version, manager=self.name, size=None, install_date=install_date, source=source))
         return packages
 
     async def update(self, name: str) -> bool:

@@ -151,10 +151,15 @@ class DetailPane(Widget):
             f"  [{color}]{pkg.manager}[/{color}]"
             f"{badge_str}"
         )
-        self.query_one("#dp-meta", Static).update(
+        meta = (
             f"[dim]manager[/dim]  [{color}]{pkg.manager}[/{color}]  "
             f"[dim]version[/dim]  {pkg.version}"
         )
+        if pkg.install_date:
+            meta += f"  [dim]installed[/dim]  {pkg.install_date}"
+        if pkg.source:
+            meta += f"\n[dim]source[/dim]  [dim]{pkg.source}[/dim]"
+        self.query_one("#dp-meta", Static).update(meta)
 
         header = _gemini_header()
         if ai_text:
