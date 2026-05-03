@@ -11,33 +11,39 @@
 
 ## What is XYZ?
 
-XYZ is a terminal-based dependency manager that gives you a single interactive interface across all your package managers. Instead of juggling `pip list`, `brew info`, `npm ls`, and `pacman -Q` in separate sessions, XYZ aggregates everything into one searchable, actionable TUI — powered by AI.
+XYZ is a terminal-based dependency manager that gives you a single interactive interface across your package managers. Instead of juggling `pip list`, `brew info`, and `npm ls` in separate sessions, XYZ aggregates everything into one searchable, actionable TUI — powered by AI.
 
 Select an unfamiliar package and XYZ will tell you exactly what it is, why it's probably on your machine, and whether it's safe to remove. No browser. No tab switching. No guessing.
 
 ---
 
-## Features (MVP)
+## Features
 
-- **Unified package list** — aggregates packages from all supported managers into one view
-- **Fuzzy search** — filter across all packages in real time as you type
+- **Unified package list** — aggregates installed packages from detected managers into one view
+- **Live search + manager filtering** — substring filtering, manager pills, and orphan-only toggle
 - **Natural language AI search** — prefix search with `?` (e.g., `?AI` or `?database`) to find packages by intent using Gemini
-- **Update / Delete** — manage packages in-place with a dry-run preview before any destructive action
-- **Orphan detection** — flags packages with no remaining dependents
-- **AI package explainer** — select any package for a plain-English explanation via Gemini API
-- **Package detail pane** — version, install source, size, and dependent count at a glance
+- **Safe package actions** — update/delete with dry-run preview modal before confirmation
+- **Auto-refresh after actions** — package list re-scans after updates/deletes
+- **Orphan detection (non-AI)** — manager-native orphan checks for `pip`, `npm`, and `brew`
+- **AI package explainer (streaming)** — streamed Gemini explanations in the detail pane
+- **Smart cleanup recommendations** — Gemini-powered remove/review suggestions
+- **Dependency graph view** — dependency graph preview + fullscreen modal (when `mermaid-ascii` is available)
+- **CVE scan** — Gemini Search-grounded vulnerability summary for selected package
 
 ---
 
 ## Keybindings
 
-- `↑/↓` or `j/k` — navigate package list
+- `↑/↓` — navigate package list
 - `u` — update selected package
 - `d` — delete selected package
+- `U` — upgrade-all placeholder (notification only; bulk upgrade execution not yet implemented)
 - `a` — fetch AI explanation
+- `s` — scan selected package for CVEs
 - `g` — view dependency graph
 - `o` — toggle orphan packages filter
-- `m` — cycle through package managers
+- `m` — cycle manager filter
+- `c` — run smart cleanup analysis
 - `/` — focus search bar (prefix search with `?` for AI search)
 - `esc` — blur search or close modals
 - `ctrl+q` — quit
@@ -51,9 +57,8 @@ Select an unfamiliar package and XYZ will tell you exactly what it is, why it's 
 | `pip` | Python (all platforms) |
 | `brew` | macOS / Linux |
 | `npm` | Node.js (all platforms) |
-| `apt` | Debian / Ubuntu |
-| `pacman` | Arch Linux |
-| `bun` | JavaScript (all platforms) |
+
+Current release auto-detects and integrates: `pip`, `brew`, and `npm`.
 
 ---
 
@@ -64,7 +69,7 @@ Select an unfamiliar package and XYZ will tell you exactly what it is, why it's 
 - Python 3.10+
 - One or more of the supported package managers installed
 
-### Install
+### Install (Users)
 
 ```bash
 pip install xyz-manager
@@ -76,6 +81,12 @@ pip install xyz-manager
 xyz
 ```
 
+You can also run as a module:
+
+```bash
+python -m xyz
+```
+
 ### Gemini API Key (for AI explainer)
 
 ```bash
@@ -83,7 +94,31 @@ export GEMINI_API_KEY=your_key_here
 xyz
 ```
 
-Without a key, XYZ runs fully in offline mode — all features except the AI explainer remain available.
+Without a key, XYZ runs in offline mode: package listing/search/filtering and package actions remain available; AI features (AI search, explainer, smart cleanup, CVE scan) are disabled.
+
+## Development Setup
+
+### Clone and install
+
+```bash
+git clone https://github.com/minkim26/xyz.git
+cd xyz
+pip install -e .
+```
+
+### Run locally
+
+```bash
+xyz
+# or
+python -m xyz
+```
+
+### Run tests
+
+```bash
+pytest
+```
 
 ## Tech Stack
 
@@ -103,7 +138,8 @@ Without a key, XYZ runs fully in offline mode — all features except the AI exp
 - [ ] **v1.2** — CVE security overlay via OSV API
 - [ ] **v1.3** — Duplicate detection (same package across multiple managers)
 - [ ] **v1.4** — Audit trail with install-reason annotations
-- [ ] **Post-MVP** — `cargo`, `conda`, `pipx`, `gem`, `winget` support
+- [ ] **v1.5** — Bulk upgrade execution for `U` (currently UI placeholder)
+- [ ] **Post-MVP** — expand manager coverage (`apt`, `pacman`, `bun`, `cargo`, `conda`, `pipx`, `gem`, `winget`)
 
 ---
 
@@ -119,7 +155,7 @@ Without a key, XYZ runs fully in offline mode — all features except the AI exp
 
 ## License
 
-MIT — do whatever you want with it.
+MIT. See [LICENSE](LICENSE) for the full text.
 
 ---
 
