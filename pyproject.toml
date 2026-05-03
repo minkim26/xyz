@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-xyz = "xyz.app:main"
+xyz = "xyz.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
