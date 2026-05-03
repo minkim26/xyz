@@ -339,6 +339,50 @@ class GraphModal(ModalScreen):
 
 
 # ---------------------------------------------------------------------------
+# Smart cleanup — loading modal
+# ---------------------------------------------------------------------------
+
+class CleanupLoadingModal(ModalScreen):
+    DEFAULT_CSS = """
+    CleanupLoadingModal { align: center middle; }
+    #cl-box {
+        width: 54; height: auto;
+        border: thick $primary; background: $surface; padding: 2 4;
+    }
+    #cl-text { text-align: center; }
+    """
+
+    BINDINGS = [Binding("escape", "dismiss", show=False)]
+
+    def __init__(self, total: int) -> None:
+        super().__init__()
+        self._total = total
+        self._frame = 0
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="cl-box"):
+            yield Static("", id="cl-text")
+
+    def on_mount(self) -> None:
+        self._tick()
+        self.set_interval(0.2, self._tick)
+
+    def _tick(self) -> None:
+        idx = self._frame % len(_SPINNER_CHARS)
+        char = _SPINNER_CHARS[idx]
+        color = _SPINNER_COLORS[idx]
+        self._frame += 1
+        try:
+            self.query_one("#cl-text", Static).update(
+                f"{_gemini_header()}\n\n"
+                f"[bold {color}]{char}[/bold {color}] "
+                f"[dim]Analyzing {self._total} packages…[/dim]"
+            )
+        except Exception:
+            pass
+
+
+# ---------------------------------------------------------------------------
 # Smart cleanup modal
 # ---------------------------------------------------------------------------
 
@@ -892,7 +936,8 @@ class XYZApp(App):
         if not self._all_packages:
             self.notify("No packages loaded yet.", severity="warning")
             return
-        self.notify(f"Analyzing {len(self._all_packages)} packages with Gemini…", title="Smart Cleanup")
+        loading = CleanupLoadingModal(len(self._all_packages))
+        self.push_screen(loading)
         try:
             pkg_dicts = [
                 {"name": p.name, "manager": p.manager, "version": p.version}
@@ -900,8 +945,17 @@ class XYZApp(App):
             ]
             recs = await smart_cleanup(pkg_dicts, dupe_names=self._dupe_names)
         except Exception as exc:
+            try:
+                loading.dismiss()
+            except Exception:
+                pass
             self.notify(f"Cleanup analysis failed: {exc}", severity="error")
             return
+
+        try:
+            loading.dismiss()
+        except Exception:
+            pass
 
         result: Optional[dict] = await self.push_screen_wait(CleanupModal(recs, len(self._all_packages)))
         if result is None:
