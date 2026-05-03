@@ -11,10 +11,10 @@ from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Sta
 
 try:
     from xyz.managers import Package, ManagerRegistry
-    from xyz.ai import explain_package, assess_orphan_risk
+    from xyz.ai import explain_package, assess_orphan_risk, natural_language_search
 except ImportError:
     from managers import Package, ManagerRegistry  # type: ignore[no-redef]
-    from ai import explain_package, assess_orphan_risk  # type: ignore[no-redef]
+    from ai import explain_package, assess_orphan_risk, natural_language_search  # type: ignore[no-redef]
 
 
 # ---------------------------------------------------------------------------
@@ -292,6 +292,25 @@ class XYZApp(App):
 
     def on_input_changed(self, _: Input.Changed) -> None:
         self._apply_filters()
+
+    async def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "search-input":
+            query = event.value.strip()
+            if query.startswith("?"):
+                self.query_one(DetailPane).update("[dim]Asking Gemini to find packages...[/dim]")
+                package_names = [p.name for p in self._all_packages]
+                
+                try:
+                    matches = await natural_language_search(query[1:].strip(), package_names)
+                    self._filtered = [p for p in self._all_packages if p.name in matches]
+                    self._rebuild_table()
+                    
+                    if matches:
+                        self.query_one(DetailPane).update(f"[bold cyan]AI Search Found {len(matches)} matches![/bold cyan]\nSelect one to view details.")
+                    else:
+                        self.query_one(DetailPane).update("[yellow]AI could not find any relevant packages.[/yellow]")
+                except Exception as e:
+                    self.query_one(DetailPane).update(f"[red]AI Search Error: {e}[/red]")
 
     # ── actions ──────────────────────────────────────────────────────────────
 
