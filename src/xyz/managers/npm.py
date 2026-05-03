@@ -47,12 +47,18 @@ class NpmManager(BaseManager):
             packages.append(Package(name=pkg_name, version=version, manager=self.name, install_date=install_date, source=source))
         return packages
 
-    async def update(self, name: str) -> tuple[bool, str]:
-        stdout, stderr, code = await run_command(["npm", "update", "-g", name])
+    async def update(self, name: str, dry_run: bool = False) -> tuple[bool, str]:
+        cmd = ["npm", "update", "-g", name]
+        if dry_run:
+            cmd.append("--dry-run")
+        stdout, stderr, code = await run_command(cmd)
         return code == 0, f"{stdout}\n{stderr}".strip()
 
-    async def delete(self, name: str) -> tuple[bool, str]:
-        stdout, stderr, code = await run_command(["npm", "uninstall", "-g", name])
+    async def delete(self, name: str, dry_run: bool = False) -> tuple[bool, str]:
+        cmd = ["npm", "uninstall", "-g", name]
+        if dry_run:
+            cmd.append("--dry-run")
+        stdout, stderr, code = await run_command(cmd)
         return code == 0, f"{stdout}\n{stderr}".strip()
 
     async def check_orphans(self) -> builtins.list[Package]:

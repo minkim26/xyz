@@ -67,12 +67,18 @@ class BrewManager(BaseManager):
             packages.append(Package(name=name, version=version, manager=self.name, size=None, install_date=install_date, source=source))
         return packages
 
-    async def update(self, name: str) -> tuple[bool, str]:
-        stdout, stderr, code = await run_command(["brew", "upgrade", name])
+    async def update(self, name: str, dry_run: bool = False) -> tuple[bool, str]:
+        cmd = ["brew", "upgrade", name]
+        if dry_run:
+            cmd.append("--dry-run")
+        stdout, stderr, code = await run_command(cmd)
         return code == 0, f"{stdout}\n{stderr}".strip()
 
-    async def delete(self, name: str) -> tuple[bool, str]:
-        stdout, stderr, code = await run_command(["brew", "uninstall", name])
+    async def delete(self, name: str, dry_run: bool = False) -> tuple[bool, str]:
+        if dry_run:
+            return True, f"Would uninstall {name}."
+        cmd = ["brew", "uninstall", name]
+        stdout, stderr, code = await run_command(cmd)
         return code == 0, f"{stdout}\n{stderr}".strip()
 
     async def get_deps(self, name: str) -> tuple[list[str], list[str]]:

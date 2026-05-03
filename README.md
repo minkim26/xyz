@@ -21,10 +21,26 @@ Select an unfamiliar package and XYZ will tell you exactly what it is, why it's 
 
 - **Unified package list** — aggregates packages from all supported managers into one view
 - **Fuzzy search** — filter across all packages in real time as you type
+- **Natural language AI search** — prefix search with `?` (e.g., `?AI` or `?database`) to find packages by intent using Gemini
 - **Update / Delete** — manage packages in-place with a dry-run preview before any destructive action
 - **Orphan detection** — flags packages with no remaining dependents
 - **AI package explainer** — select any package for a plain-English explanation via Gemini API
 - **Package detail pane** — version, install source, size, and dependent count at a glance
+
+---
+
+## Keybindings
+
+- `↑/↓` or `j/k` — navigate package list
+- `u` — update selected package
+- `d` — delete selected package
+- `a` — fetch AI explanation
+- `g` — view dependency graph
+- `o` — toggle orphan packages filter
+- `m` — cycle through package managers
+- `/` — focus search bar (prefix search with `?` for AI search)
+- `esc` — blur search or close modals
+- `ctrl+q` — quit
 
 ---
 

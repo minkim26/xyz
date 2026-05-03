@@ -1,4 +1,5 @@
 .claude
+.vscode/
 
 # Python artifacts
 __pycache__/
