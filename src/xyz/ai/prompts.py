@@ -34,6 +34,40 @@ Assess the risk of removing this package. Respond in exactly this format:
 commonly depends on this package.)\
 """
 
+CLEANUP_PROMPT = """\
+You are a package management expert auditing a developer's machine. \
+This person is an active developer — tools like pytest, flake8, black, eslint, \
+docker, terraform, ansible, and other dev/ops tools are intentional installs. \
+Never flag those for removal.
+
+Installed packages:
+{package_list}
+{dupes_section}
+Use verdict "remove" ONLY for packages that are:
+- Officially deprecated or end-of-life with a named successor (e.g. "pkg-resources" \
+superseded by "packaging", "nose" superseded by "pytest")
+- Clearly a leftover artifact with no modern relevance (e.g. very old Python 2 compat \
+shims like "future", "six" when the rest of the stack is Python 3-only)
+- An exact functional duplicate of another package already in this list \
+(e.g. both "colour" and "colorama" installed, serving identical purpose)
+
+Use verdict "review" ONLY for:
+- Packages with the same name installed via two different managers (cross-manager \
+duplicates — these are almost always unintentional)
+- Two packages in the list that do the exact same job and one is clearly redundant
+
+When flagging similar packages (e.g. many tree-sitter-* variants), group them into \
+a single entry for the parent package rather than listing each one separately.
+
+If unsure, skip it. Return a short, focused list — quality over quantity.
+
+Return ONLY a raw JSON array — no markdown fences, no explanation. Each element:
+{{"name": "<exact name>", "manager": "<exact manager>", "verdict": "remove"|"review", \
+"reason": "<one sentence>"}}
+
+Return [] if nothing clearly meets the above criteria.\
+"""
+
 NL_SEARCH_PROMPT = """\
 You are a package search assistant. Given the following list of installed \
 package names:
