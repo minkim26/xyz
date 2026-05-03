@@ -55,24 +55,34 @@ class DetailPane(Widget):
         background: $panel;
     }
     #dp-header {
-        padding: 1 2 0 2;
+        padding: 0 2;
         height: auto;
         border-bottom: solid $surface;
     }
     #dp-meta {
-        padding: 1 2;
+        padding: 0 2;
         height: auto;
         border-bottom: solid $surface;
     }
     #dp-actions {
-        padding: 1 2;
-        height: 5;
+        padding: 0 2;
+        height: 4;
         border-bottom: solid $surface;
         align: left middle;
     }
     #dp-actions Button {
         margin-right: 1;
-        min-width: 14;
+        min-width: 16;
+        padding: 0;
+        text-align: center;
+    }
+    #btn-detail-update {
+        background: #3B82F6;
+        border: round #3B82F6;
+    }
+    #btn-detail-remove {
+        background: #DC2626;
+        border: round #DC2626;
     }
     #dp-ai-scroll {
         height: 1fr;
@@ -87,8 +97,8 @@ class DetailPane(Widget):
         yield Static("", id="dp-header")
         yield Static("", id="dp-meta")
         with Horizontal(id="dp-actions"):
-            yield Button("↑  update", id="btn-detail-update", variant="primary")
-            yield Button("✕  remove", id="btn-detail-remove", variant="error")
+            yield Button("↑\nupdate", id="btn-detail-update", variant="primary")
+            yield Button("✕\nremove", id="btn-detail-remove", variant="error")
         with VerticalScroll(id="dp-ai-scroll"):
             yield Static("", id="dp-ai")
 
@@ -201,14 +211,14 @@ class XYZApp(App):
 
     /* ── search bar ── */
     #search-row {
-        height: 5;
+        height: 3;
         padding: 0 1;
         background: $panel;
         border-bottom: solid $primary-darken-2;
         align: left middle;
     }
     #search-label {
-        width: 8;
+        width: auto;
         color: $text-muted;
         text-style: bold;
         padding: 0 1;
@@ -226,25 +236,25 @@ class XYZApp(App):
     }
     #manager-pills {
         width: auto;
-        height: 5;
+        height: 3;
         align: left middle;
     }
     .manager-pill {
         height: 3;
-        min-width: 5;
+        min-width: 7;
         border: none;
         margin: 0 0 0 1;
-        background: $surface;
+        color: white;
     }
-    .pill-active { text-style: bold reverse; }
+    .pill-active { text-style: bold underline; }
 
     /* per-manager pill colours */
-    #pill-pip    { color: #3B82F6; }
-    #pill-npm    { color: #22C55E; }
-    #pill-brew   { color: #EF4444; }
-    #pill-apt    { color: #EAB308; }
-    #pill-bun    { color: #F97316; }
-    #pill-pacman { color: #A855F7; }
+    #pill-pip    { background: #3B82F6; border: round #3B82F6; }
+    #pill-npm    { background: #22C55E; border: round #22C55E; }
+    #pill-brew   { background: #EF4444; border: round #EF4444; }
+    #pill-apt    { background: #EAB308; border: round #EAB308; color: black; }
+    #pill-bun    { background: #F97316; border: round #F97316; }
+    #pill-pacman { background: #A855F7; border: round #A855F7; }
 
     /* ── main panels ── */
     #main-row { height: 1fr; }
