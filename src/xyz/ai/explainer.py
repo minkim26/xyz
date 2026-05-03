@@ -58,6 +58,33 @@ async def explain_package(
     return result
 
 
+async def stream_explain_package(
+    client: "GeminiClient",
+    name: str,
+    manager: str,
+    version: str = "unknown",
+):
+    """Stream a plain-English explanation, yielding text chunks as they arrive.
+
+    On a cache hit, yields the cached text as a single chunk so the caller
+    doesn't need to distinguish the two cases.
+    """
+    cache_key = (name, manager)
+    if cache_key in _cache:
+        logger.debug("Cache hit for %s/%s", manager, name)
+        yield _cache[cache_key]
+        return
+
+    prompt = EXPLAIN_PROMPT.format(name=name, manager=manager, version=version)
+    accumulated = ""
+    async for chunk in client.stream_generate(prompt):
+        accumulated += chunk
+        yield chunk
+
+    if accumulated and not accumulated.startswith(_ERROR_PREFIXES):
+        _cache[cache_key] = accumulated
+
+
 def clear_cache() -> None:
     """Clear the explanation cache -- useful for testing."""
     _cache.clear()

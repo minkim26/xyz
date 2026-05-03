@@ -53,6 +53,31 @@ async def assess_orphan_risk(
     return result
 
 
+async def stream_assess_orphan_risk(
+    client: "GeminiClient",
+    name: str,
+    manager: str,
+):
+    """Stream an orphan risk assessment, yielding text chunks as they arrive.
+
+    On a cache hit, yields the cached text as a single chunk.
+    """
+    cache_key = (name, manager)
+    if cache_key in _cache:
+        logger.debug("Orphan cache hit for %s/%s", manager, name)
+        yield _cache[cache_key]
+        return
+
+    prompt = ORPHAN_RISK_PROMPT.format(name=name, manager=manager)
+    accumulated = ""
+    async for chunk in client.stream_generate(prompt):
+        accumulated += chunk
+        yield chunk
+
+    if accumulated and not accumulated.startswith(_ERROR_PREFIXES):
+        _cache[cache_key] = accumulated
+
+
 def clear_cache() -> None:
     """Clear the orphan assessment cache."""
     _cache.clear()

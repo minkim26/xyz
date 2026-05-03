@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from xyz.ai.client import GeminiClient
 from xyz.ai.cleanup import smart_cleanup as _cleanup
-from xyz.ai.explainer import explain_package as _explain
-from xyz.ai.orphan import assess_orphan_risk as _assess
+from xyz.ai.explainer import explain_package as _explain, stream_explain_package as _stream_explain
+from xyz.ai.orphan import assess_orphan_risk as _assess, stream_assess_orphan_risk as _stream_assess
 from xyz.ai.search import natural_language_search as _nl_search
 
 
@@ -47,6 +47,20 @@ async def natural_language_search(query: str, package_names: list[str]) -> list[
     return await _nl_search(client, query, package_names)
 
 
+async def stream_explain_package(name: str, manager: str, version: str):
+    """Stream a plain-English package explanation, yielding text chunks."""
+    client = GeminiClient.get_instance()
+    async for chunk in _stream_explain(client, name, manager, version):
+        yield chunk
+
+
+async def stream_assess_orphan_risk(name: str, manager: str):
+    """Stream an orphan risk assessment, yielding text chunks."""
+    client = GeminiClient.get_instance()
+    async for chunk in _stream_assess(client, name, manager):
+        yield chunk
+
+
 async def smart_cleanup(packages: list[dict], dupe_names: set[str] | None = None) -> list[dict]:
     """Analyze all installed packages and return cleanup recommendations.
 
@@ -60,7 +74,9 @@ async def smart_cleanup(packages: list[dict], dupe_names: set[str] | None = None
 __all__ = [
     "GeminiClient",
     "explain_package",
+    "stream_explain_package",
     "assess_orphan_risk",
+    "stream_assess_orphan_risk",
     "natural_language_search",
     "smart_cleanup",
 ]
