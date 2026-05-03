@@ -12,6 +12,8 @@ class Package:
     manager: str
     size: int | None = None  # bytes; None when the CLI does not provide it
     is_orphan: bool = False
+    install_date: str | None = None
+    source: str | None = None
 
     def formatted_size(self) -> str:
         if self.size is None:

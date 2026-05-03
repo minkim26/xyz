@@ -1,60 +1,176 @@
 from __future__ import annotations
 
 import asyncio
+from collections import Counter
 from typing import Optional
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Static
+from textual.widget import Widget
+from textual.widgets import Button, DataTable, Input, Label, Static
+
+from xyz.managers import Package, ManagerRegistry
 
 try:
-    from xyz.managers import Package, ManagerRegistry
     from xyz.ai import explain_package, assess_orphan_risk, natural_language_search
 except ImportError:
-    from managers import Package, ManagerRegistry  # type: ignore[no-redef]
-    from ai import explain_package, assess_orphan_risk, natural_language_search  # type: ignore[no-redef]
+    async def explain_package(_name: str, _manager: str, _version: str) -> str:  # type: ignore[misc]
+        return "AI unavailable — check GEMINI_API_KEY and dependencies."
+    async def assess_orphan_risk(_name: str, _manager: str) -> str:  # type: ignore[misc]
+        return "AI unavailable — check GEMINI_API_KEY and dependencies."
+    async def natural_language_search(_query: str, _package_names: list[str]) -> list[str]:  # type: ignore[misc]
+        return []
+
+
+# Breathing animation chars + matching Gemini-brand color gradient (blue→violet→fuchsia→back)
+_SPINNER_CHARS  = ["•",       "✦",       "✦",       "✧",       "✦",       "✦",       "✧",       "•"      ]
+_SPINNER_COLORS = ["#4285F4", "#6366F1", "#8B5CF6", "#A855F7", "#C026D3", "#A855F7", "#8B5CF6", "#6366F1"]
+
+# Per-letter gradient for the static header
+_GEMINI_GRAD = ["#4285F4", "#6366F1", "#8B5CF6", "#A855F7", "#C026D3", "#EC4899"]
+
+def _gemini_header() -> str:
+    parts = [f"[bold {c}]{ch}[/bold {c}]" for c, ch in zip(_GEMINI_GRAD, "GEMINI")]
+    return f"[bold #4285F4]✦[/bold #4285F4] {''.join(parts)}"
+
+MANAGER_COLORS: dict[str, str] = {
+    "pip":    "#3B82F6",
+    "npm":    "#22C55E",
+    "brew":   "#EF4444",
+    "apt":    "#EAB308",
+    "bun":    "#F97316",
+    "pacman": "#A855F7",
+}
+
+def _mgr_color(manager: str) -> str:
+    return MANAGER_COLORS.get(manager.lower(), "#9CA3AF")
+
+def _status_markup(pkg: Package, dupe_names: set[str]) -> str:
+    if pkg.is_orphan:
+        return "[bold red]orphan[/bold red]"
+    if pkg.name in dupe_names:
+        return "[yellow]⚠ dupe[/yellow]"
+    return "[dim green]✓ ok[/dim green]"
 
 
 # ---------------------------------------------------------------------------
 # Detail pane
 # ---------------------------------------------------------------------------
 
-class DetailPane(Static):
+class DetailPane(Widget):
     DEFAULT_CSS = """
     DetailPane {
-        padding: 1 2;
         height: 100%;
         background: $panel;
-        overflow-y: auto;
+    }
+    #dp-header {
+        padding: 0 2;
+        height: auto;
+        border-bottom: solid $surface;
+    }
+    #dp-meta {
+        padding: 0 2;
+        height: auto;
+        border-bottom: solid $surface;
+    }
+    #dp-actions {
+        padding: 0 2;
+        height: 4;
+        border-bottom: solid $surface;
+        align: left middle;
+    }
+    #dp-actions Button {
+        margin-right: 1;
+        min-width: 16;
+        padding: 0;
+        text-align: center;
+    }
+    #btn-detail-update {
+        background: #3B82F6;
+        border: round #3B82F6;
+    }
+    #btn-detail-update:hover {
+        background: #2563EB;
+        border: round #2563EB;
+    }
+    #btn-detail-remove {
+        background: #DC2626;
+        border: round #DC2626;
+    }
+    #btn-detail-remove:hover {
+        background: #B91C1C;
+        border: round #B91C1C;
+    }
+    #dp-ai-scroll {
+        height: 1fr;
+    }
+    #dp-ai {
+        padding: 1 2;
+        height: auto;
     }
     """
 
-    def show_loading(self) -> None:
-        self.update("[dim]Scanning package managers…[/dim]")
+    def compose(self) -> ComposeResult:
+        yield Static("", id="dp-header")
+        yield Static("", id="dp-meta")
+        with Horizontal(id="dp-actions"):
+            yield Button("↑\nupdate", id="btn-detail-update", variant="primary")
+            yield Button("✕\nremove", id="btn-detail-remove", variant="error")
+        with VerticalScroll(id="dp-ai-scroll"):
+            yield Static("", id="dp-ai")
 
-    def show_empty(self) -> None:
-        self.update("[dim]Select a package to see details.[/dim]")
+    def on_mount(self) -> None:
+        self.show_empty()
 
-    def show_package(self, pkg: Package, ai_text: str = "", ai_loading: bool = False) -> None:
-        orphan_badge = "\n[yellow bold]⚠  Orphaned[/yellow bold]" if pkg.is_orphan else ""
-        if ai_text:
-            ai_block = f"\n\n[bold cyan]AI Explanation[/bold cyan]\n{ai_text}"
-        elif ai_loading:
-            ai_block = "\n\n[bold cyan]AI Explanation[/bold cyan]\n[dim]Loading…[/dim]"
-        else:
-            ai_block = "\n\n[bold cyan]AI Explanation[/bold cyan]\n[dim]Press 'a' to generate insights[/dim]"
+    def show_empty(self, msg: str = "Select a package to see details.") -> None:
+        self.query_one("#dp-header", Static).update(f"[dim]{msg}[/dim]")
+        self.query_one("#dp-meta", Static).update("")
+        self.query_one("#dp-ai", Static).update("")
+        self.query_one("#dp-actions").display = False
 
-        self.update(
-            f"[bold white]{pkg.name}[/bold white]\n"
-            f"[dim]{'─' * 30}[/dim]\n"
-            f"Version    {pkg.version}\n"
-            f"Manager    {pkg.manager}\n"
-            f"Size       {pkg.size}"
-            f"{orphan_badge}"
-            f"{ai_block}"
+    def show_package(
+        self,
+        pkg: Package,
+        dupe_names: set[str],
+        ai_text: str = "",
+        ai_loading: bool = False,
+    ) -> None:
+        color = _mgr_color(pkg.manager)
+        badges: list[str] = []
+        if pkg.is_orphan:
+            badges.append("[bold red]orphan[/bold red]")
+        if pkg.name in dupe_names:
+            badges.append("[yellow]⚠ dupe[/yellow]")
+        badge_str = "  " + "  ".join(badges) if badges else ""
+
+        self.query_one("#dp-header", Static).update(
+            f"[bold white]{pkg.name}[/bold white]  "
+            f"[dim]{pkg.version}[/dim]"
+            f"  [{color}]{pkg.manager}[/{color}]"
+            f"{badge_str}"
         )
+        meta = (
+            f"[dim]manager[/dim]  [{color}]{pkg.manager}[/{color}]  "
+            f"[dim]version[/dim]  {pkg.version}"
+        )
+        if pkg.install_date:
+            meta += f"  [dim]installed[/dim]  {pkg.install_date}"
+        if pkg.source:
+            meta += f"\n[dim]source[/dim]  [dim]{pkg.source}[/dim]"
+        self.query_one("#dp-meta", Static).update(meta)
+
+        header = _gemini_header()
+        if ai_text:
+            ai_block = f"{header}\n\n{ai_text}"
+        elif ai_loading:
+            ai_block = f"{header}\n\n[dim]Loading…[/dim]"
+        else:
+            ai_block = f"{header}\n\n[dim]Press 'a' for AI insights[/dim]"
+
+        self.query_one("#dp-ai", Static).update(ai_block)
+        self.query_one("#dp-actions").display = True
 
 
 # ---------------------------------------------------------------------------
@@ -63,38 +179,16 @@ class DetailPane(Static):
 
 class ConfirmDeleteModal(ModalScreen[bool]):
     DEFAULT_CSS = """
-    ConfirmDeleteModal {
-        align: center middle;
-    }
+    ConfirmDeleteModal { align: center middle; }
     #modal-box {
-        width: 58;
-        height: auto;
-        border: thick $error;
-        background: $surface;
-        padding: 1 2;
+        width: 58; height: auto;
+        border: thick $error; background: $surface; padding: 1 2;
     }
-    #modal-title {
-        text-align: center;
-        color: $error;
-        text-style: bold;
-        margin-bottom: 1;
-    }
-    #modal-pkg {
-        text-align: center;
-        margin-bottom: 1;
-    }
-    #modal-hint {
-        text-align: center;
-        margin-bottom: 1;
-    }
-    #modal-buttons {
-        layout: horizontal;
-        align: center middle;
-        height: 3;
-    }
-    #modal-buttons Button {
-        margin: 0 2;
-    }
+    #modal-title { text-align: center; color: $error; text-style: bold; margin-bottom: 1; }
+    #modal-pkg   { text-align: center; margin-bottom: 1; }
+    #modal-hint  { text-align: center; margin-bottom: 1; }
+    #modal-buttons { layout: horizontal; align: center middle; height: 3; }
+    #modal-buttons Button { margin: 0 2; }
     """
 
     def __init__(self, pkg: Package) -> None:
@@ -123,56 +217,102 @@ class ConfirmDeleteModal(ModalScreen[bool]):
 # ---------------------------------------------------------------------------
 
 class XYZApp(App):
-    TITLE = "XYZ"
-    SUB_TITLE = "Universal Dependency Manager"
+    TITLE = "xyz — dependency manager"
 
     BINDINGS = [
-        Binding("u",      "update_package", "Update",      show=True),
-        Binding("d",      "delete_package", "Delete",      show=True),
-        Binding("U",      "upgrade_all",    "Upgrade All", show=True),
-        Binding("o",      "toggle_orphans", "Orphans",     show=True),
-        Binding("m",      "cycle_manager",  "Manager",     show=True),
-        Binding("a",      "ask_ai",         "Ask AI",      show=True),
-        Binding("/",      "focus_search",   "Search",      show=True),
-        Binding("escape", "blur_search",    "Back",        show=False),
-        Binding("q",      "quit",           "Quit",        show=True),
+        Binding("u",      "update_package", "u update",      show=False),
+        Binding("d",      "delete_package", "d delete",      show=False),
+        Binding("U",      "upgrade_all",    "U upgrade all", show=False),
+        Binding("o",      "toggle_orphans", "o orphans",     show=False),
+        Binding("m",      "cycle_manager",  "m manager",     show=False),
+        Binding("a",      "ask_ai",         "a AI",          show=False),
+        Binding("/",      "focus_search",   "/ search",      show=False),
+        Binding("escape", "blur_search",    "esc back",      show=False),
+        Binding("q",      "quit",           "q quit",        show=False),
     ]
 
     DEFAULT_CSS = """
-    Screen {
-        layout: vertical;
-    }
+    Screen { layout: vertical; }
 
+    /* ── search bar ── */
     #search-row {
         height: 3;
         padding: 0 1;
         background: $panel;
-        border-bottom: solid $primary;
+        border-bottom: solid $primary-darken-2;
+        align: left middle;
     }
-
-    #search-input {
-        width: 1fr;
-    }
-
-    #filter-label {
-        width: 22;
-        content-align: center middle;
-        color: $accent;
+    #search-label {
+        width: auto;
+        color: $text-muted;
         text-style: bold;
         padding: 0 1;
     }
-
-    #main-row {
-        height: 1fr;
+    #search-input {
+        width: 1fr;
+        background: $surface;
+        border: tall $primary-darken-2;
     }
+    #result-count {
+        width: auto;
+        min-width: 12;
+        color: $text-muted;
+        padding: 0 1;
+    }
+    #manager-pills {
+        width: auto;
+        height: 3;
+        align: left middle;
+    }
+    .manager-pill {
+        height: 3;
+        min-width: 7;
+        border: none;
+        margin: 0 0 0 1;
+        color: white;
+    }
+    .pill-active { text-style: bold underline; }
 
+    /* per-manager pill colours */
+    #pill-pip    { background: #3B82F6; border: round #3B82F6; }
+    #pill-npm    { background: #22C55E; border: round #22C55E; }
+    #pill-brew   { background: #EF4444; border: round #EF4444; }
+    #pill-apt    { background: #EAB308; border: round #EAB308; color: black; }
+    #pill-bun    { background: #F97316; border: round #F97316; }
+    #pill-pacman { background: #A855F7; border: round #A855F7; }
+
+    /* pill hover — darken each colour */
+    #pill-pip:hover    { background: #2563EB; border: round #2563EB; }
+    #pill-npm:hover    { background: #16A34A; border: round #16A34A; }
+    #pill-brew:hover   { background: #DC2626; border: round #DC2626; }
+    #pill-apt:hover    { background: #CA8A04; border: round #CA8A04; }
+    #pill-bun:hover    { background: #EA580C; border: round #EA580C; }
+    #pill-pacman:hover { background: #9333EA; border: round #9333EA; }
+
+    /* ── main panels ── */
+    #main-row { height: 1fr; }
     #package-list {
         width: 2fr;
-        border-right: solid $primary;
+        border-right: solid $primary-darken-2;
+    }
+    #detail-pane { width: 1fr; }
+
+    /* ── bottom stats bar ── */
+    #stats-bar {
+        height: 1;
+        background: $panel;
+        border-top: solid $primary-darken-2;
+        padding: 0 1;
+        color: $text-muted;
+        text-align: right;
     }
 
-    #detail-scroll {
-        width: 1fr;
+    /* ── custom footer ── */
+    #key-bar {
+        height: 1;
+        background: $panel;
+        padding: 0 1;
+        color: $text-muted;
     }
     """
 
@@ -180,27 +320,35 @@ class XYZApp(App):
         super().__init__()
         self._managers_registry = ManagerRegistry()
         self._all_packages: list[Package] = []
-        self._filtered: list[Package] = []
+        self._display_rows: list[Package | None] = []
+        self._dupe_names: set[str] = set()
         self._selected: Optional[Package] = None
         self._orphan_only: bool = False
         self._manager_filter: Optional[str] = None
         self._managers: list[str] = []
         self._ai_task: Optional[asyncio.Task] = None
+        self._spinner_timer = None
+        self._spinner_frame: int = 0
 
     def compose(self) -> ComposeResult:
-        yield Header()
         with Horizontal(id="search-row"):
-            yield Input(placeholder="Search packages…", id="search-input")
-            yield Label("All managers", id="filter-label")
+            yield Label("search", id="search-label")
+            yield Input(placeholder="", id="search-input")
+            yield Label("", id="result-count")
+            yield Horizontal(id="manager-pills")
         with Horizontal(id="main-row"):
             yield DataTable(id="package-list", cursor_type="row", zebra_stripes=True)
-            yield DetailPane(id="detail-scroll")
-        yield Footer()
+            yield DetailPane(id="detail-pane")
+        yield Static("", id="stats-bar")
+        yield Static(
+            "↑↓ navigate   u update   d delete   a AI   o orphans   m manager   / search   q quit",
+            id="key-bar",
+        )
 
     async def on_mount(self) -> None:
         table = self.query_one("#package-list", DataTable)
-        table.add_columns("Name", "Manager", "Version", "Size", "")
-        self.query_one(DetailPane).show_loading()
+        table.add_columns("PACKAGE", "VERSION", "MANAGER", "STATUS")
+        self.query_one(DetailPane).show_empty("Scanning package managers…")
         self.run_worker(self._load_packages())
 
     # ── loading ──────────────────────────────────────────────────────────────
@@ -209,67 +357,114 @@ class XYZApp(App):
         packages = await self._managers_registry.scan_all()
         self._all_packages = packages
         self._managers = sorted({p.manager for p in packages})
+        name_counts = Counter(p.name for p in packages)
+        self._dupe_names = {n for n, c in name_counts.items() if c > 1}
+        self._mount_pills()
         self._apply_filters()
 
-    # ── filtering & table ────────────────────────────────────────────────────
+    def _mount_pills(self) -> None:
+        container = self.query_one("#manager-pills")
+        for manager in self._managers:
+            container.mount(Button(manager, id=f"pill-{manager}", classes="manager-pill"))
+
+    # ── filtering ────────────────────────────────────────────────────────────
 
     def _apply_filters(self) -> None:
         pkgs = list(self._all_packages)
-
         if self._orphan_only:
             pkgs = [p for p in pkgs if p.is_orphan]
-
         if self._manager_filter:
             pkgs = [p for p in pkgs if p.manager == self._manager_filter]
 
         query = self.query_one("#search-input", Input).value.strip().lower()
         if query and not query.startswith("?"):
-            pkgs = [p for p in pkgs if query in p.name.lower()]
+            matched = [p for p in pkgs if query in p.name.lower()]
+            self._display_rows = matched
+            self.query_one("#result-count", Label).update(f"{len(matched)} results")
+        else:
+            self._display_rows = pkgs
+            self.query_one("#result-count", Label).update("")
 
-        self._filtered = pkgs
         self._rebuild_table()
+        self._update_stats()
 
     def _rebuild_table(self) -> None:
         table = self.query_one("#package-list", DataTable)
         table.clear()
-        for pkg in self._filtered:
-            tag = "[yellow]orphan[/yellow]" if pkg.is_orphan else ""
-            table.add_row(
-                pkg.name,
-                pkg.manager,
-                pkg.version,
-                pkg.formatted_size(),
-                tag,
-                key=pkg.name,
-            )
+
+        for item in self._display_rows:
+            if item is None:
+                table.add_row("[dim]─── other packages[/dim]", "", "", "", key="__sep__")
+            else:
+                pkg = item
+                color = _mgr_color(pkg.manager)
+                table.add_row(
+                    pkg.name,
+                    f"[dim]{pkg.version}[/dim]",
+                    f"[{color}]{pkg.manager}[/{color}]",
+                    _status_markup(pkg, self._dupe_names),
+                    key=f"{pkg.manager}:{pkg.name}",
+                )
 
         detail = self.query_one(DetailPane)
-        if not self._filtered:
-            detail.show_empty()
+        real_rows = [r for r in self._display_rows if r is not None]
+        if not real_rows:
+            detail.show_empty("No packages match.")
             self._selected = None
             return
 
-        table.move_cursor(row=0)
+        first_real = next(i for i, r in enumerate(self._display_rows) if r is not None)
+        table.move_cursor(row=first_real)
+
+    def _update_stats(self) -> None:
+        total   = len(self._all_packages)
+        mgrs    = len(self._managers)
+        orphans = sum(1 for p in self._all_packages if p.is_orphan)
+        self.query_one("#stats-bar", Static).update(
+            f"{total} packages  ·  {mgrs} managers  ·  {orphans} orphans"
+        )
 
     # ── selection ────────────────────────────────────────────────────────────
 
     def _select_row(self, row: int) -> None:
-        if not (0 <= row < len(self._filtered)):
+        if not (0 <= row < len(self._display_rows)):
             return
-        pkg = self._filtered[row]
+        pkg = self._display_rows[row]
+        if pkg is None:
+            return
         self._selected = pkg
-        
-        # Cancel any previous AI task that might still be running
         if self._ai_task and not self._ai_task.done():
             self._ai_task.cancel()
-            
-        # Just show the basic package details (wait for manual AI trigger)
-        self.query_one(DetailPane).show_package(pkg)
+        self.query_one(DetailPane).show_package(pkg, self._dupe_names)
 
     def _kick_ai(self, pkg: Package) -> None:
         if self._ai_task and not self._ai_task.done():
             self._ai_task.cancel()
         self._ai_task = asyncio.create_task(self._fetch_ai(pkg))
+
+    def _start_ai_spinner(self) -> None:
+        self._spinner_frame = 0
+        if self._spinner_timer is not None:
+            self._spinner_timer.stop()
+        self._tick_spinner()
+        self._spinner_timer = self.set_interval(0.2, self._tick_spinner)
+
+    def _tick_spinner(self) -> None:
+        idx = self._spinner_frame % len(_SPINNER_CHARS)
+        char = _SPINNER_CHARS[idx]
+        color = _SPINNER_COLORS[idx]
+        self._spinner_frame += 1
+        try:
+            self.query_one("#dp-ai", Static).update(
+                f"{_gemini_header()}\n\n[bold {color}]{char}[/bold {color}] [dim]Asking Gemini…[/dim]"
+            )
+        except Exception:
+            pass
+
+    def _stop_ai_spinner(self) -> None:
+        if self._spinner_timer is not None:
+            self._spinner_timer.stop()
+            self._spinner_timer = None
 
     async def _fetch_ai(self, pkg: Package) -> None:
         try:
@@ -277,13 +472,17 @@ class XYZApp(App):
                 text = await assess_orphan_risk(pkg.name, pkg.manager)
             else:
                 text = await explain_package(pkg.name, pkg.manager, pkg.version)
+            self._stop_ai_spinner()
             if self._selected and self._selected.name == pkg.name:
-                self.query_one(DetailPane).show_package(pkg, ai_text=text)
+                self.query_one(DetailPane).show_package(pkg, self._dupe_names, ai_text=text)
         except asyncio.CancelledError:
-            pass
+            self._stop_ai_spinner()
         except Exception as exc:
+            self._stop_ai_spinner()
             if self._selected and self._selected.name == pkg.name:
-                self.query_one(DetailPane).show_package(pkg, ai_text=f"[red]AI error: {exc}[/red]")
+                self.query_one(DetailPane).show_package(
+                    pkg, self._dupe_names, ai_text=f"[red]Error: {exc}[/red]"
+                )
 
     # ── events ───────────────────────────────────────────────────────────────
 
@@ -294,48 +493,54 @@ class XYZApp(App):
         self._apply_filters()
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.input.id == "search-input":
-            query = event.value.strip()
-            if query.startswith("?"):
-                self.query_one(DetailPane).update("[dim]Asking Gemini to find packages...[/dim]")
-                package_names = [p.name for p in self._all_packages]
-                
-                try:
-                    matches = await natural_language_search(query[1:].strip(), package_names)
-                    self._filtered = [p for p in self._all_packages if p.name in matches]
-                    self._rebuild_table()
-                    
-                    if matches:
-                        self.query_one(DetailPane).update(f"[bold cyan]AI Search Found {len(matches)} matches![/bold cyan]\nSelect one to view details.")
-                    else:
-                        self.query_one(DetailPane).update("[yellow]AI could not find any relevant packages.[/yellow]")
-                except Exception as e:
-                    self.query_one(DetailPane).update(f"[red]AI Search Error: {e}[/red]")
+        if event.input.id != "search-input":
+            return
+        query = event.value.strip()
+        if not query.startswith("?"):
+            return
+        self.query_one(DetailPane).show_empty("Asking Gemini…")
+        try:
+            package_names = [p.name for p in self._all_packages]
+            matches = await natural_language_search(query[1:].strip(), package_names)
+            matched_pkgs = [p for p in self._all_packages if p.name in matches]
+            self._display_rows = matched_pkgs
+            self._rebuild_table()
+            self.query_one("#result-count", Label).update(f"{len(matched_pkgs)} results")
+            if not matched_pkgs:
+                self.query_one(DetailPane).show_empty("No AI matches found.")
+        except Exception as exc:
+            self.query_one(DetailPane).show_empty(f"AI search error: {exc}")
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        btn_id = event.button.id or ""
+        if btn_id.startswith("pill-"):
+            self._toggle_pill(btn_id[5:])
+            event.stop()
+        elif btn_id == "btn-detail-update":
+            self.action_update_package()
+            event.stop()
+        elif btn_id == "btn-detail-remove":
+            await self.action_delete_package()
+            event.stop()
 
     # ── actions ──────────────────────────────────────────────────────────────
 
     def action_focus_search(self) -> None:
         self.query_one("#search-input", Input).focus()
 
+    def action_blur_search(self) -> None:
+        self.query_one("#package-list", DataTable).focus()
+
     def action_ask_ai(self) -> None:
         if not self._selected:
             self.notify("No package selected.", severity="warning")
             return
-            
-        # Update UI to show loading state
-        self.query_one(DetailPane).show_package(self._selected, ai_loading=True)
+        self.query_one(DetailPane).show_package(self._selected, self._dupe_names, ai_loading=True)
+        self._start_ai_spinner()
         self._kick_ai(self._selected)
-
-    def action_blur_search(self) -> None:
-        inp = self.query_one("#search-input", Input)
-        if inp.value:
-            inp.value = ""
-        else:
-            self.query_one("#package-list", DataTable).focus()
 
     def action_toggle_orphans(self) -> None:
         self._orphan_only = not self._orphan_only
-        self._update_filter_label()
         self._apply_filters()
 
     def action_cycle_manager(self) -> None:
@@ -345,26 +550,30 @@ class XYZApp(App):
         except ValueError:
             idx = 0
         self._manager_filter = options[(idx + 1) % len(options)]
-        self._update_filter_label()
+        self._update_pill_styles()
         self._apply_filters()
 
-    def _update_filter_label(self) -> None:
-        parts: list[str] = []
-        if self._orphan_only:
-            parts.append("[yellow]orphans[/yellow]")
-        if self._manager_filter:
-            parts.append(self._manager_filter)
-        label_text = " · ".join(parts) if parts else "All managers"
-        self.query_one("#filter-label", Label).update(label_text)
+    def _update_pill_styles(self) -> None:
+        for mgr in self._managers:
+            try:
+                btn = self.query_one(f"#pill-{mgr}", Button)
+                if self._manager_filter == mgr:
+                    btn.add_class("pill-active")
+                else:
+                    btn.remove_class("pill-active")
+            except Exception:
+                pass
+
+    def _toggle_pill(self, manager: str) -> None:
+        self._manager_filter = None if self._manager_filter == manager else manager
+        self._update_pill_styles()
+        self._apply_filters()
 
     def action_update_package(self) -> None:
         if not self._selected:
             self.notify("No package selected.", severity="warning")
             return
-        self.notify(
-            f"Updating [bold]{self._selected.name}[/bold]…",
-            title="Update",
-        )
+        self.notify(f"Updating [bold]{self._selected.name}[/bold]…", title="Update")
         # TODO: await self._managers_registry.update(self._selected)
 
     async def action_delete_package(self) -> None:
@@ -374,19 +583,14 @@ class XYZApp(App):
         confirmed: bool = await self.push_screen_wait(ConfirmDeleteModal(self._selected))
         if confirmed:
             pkg = self._selected
-            self.notify(
-                f"Deleting [bold]{pkg.name}[/bold]…",
-                title="Delete",
-                severity="warning",
-            )
+            self.notify(f"Deleting [bold]{pkg.name}[/bold]…", title="Delete", severity="warning")
             # TODO: await self._managers_registry.delete(pkg)
             self._all_packages = [p for p in self._all_packages if p.name != pkg.name]
             self._apply_filters()
 
     def action_upgrade_all(self) -> None:
-        count = len(self._all_packages)
         self.notify(
-            f"Upgrading {count} packages across all managers…",
+            f"Upgrading {len(self._all_packages)} packages across all managers…",
             title="Upgrade All",
         )
         # TODO: await self._managers_registry.upgrade_all()

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+import glob
 import json
+import os
 import shutil
+from datetime import datetime
 
 from .base import BaseManager, Package
 from ._subprocess import run_command
@@ -19,17 +23,42 @@ class PipManager(BaseManager):
         return shutil.which("pip3") is not None or shutil.which("pip") is not None
 
     async def list(self) -> list[Package]:
-        stdout, _, returncode = await run_command([self._cmd, "list", "--format=json"])
-        if returncode != 0:
+        (list_out, _, rc), (show_out, _, _) = await asyncio.gather(
+            run_command([self._cmd, "list", "--format=json"]),
+            run_command([self._cmd, "show", "pip"]),
+        )
+        if rc != 0:
             return []
         try:
-            data = json.loads(stdout)
-            return [
-                Package(name=p["name"], version=p["version"], manager=self.name)
-                for p in data
-            ]
-        except (json.JSONDecodeError, KeyError, TypeError):
+            data = json.loads(list_out)
+        except (json.JSONDecodeError, TypeError):
             return []
+
+        site_dirs = []
+        for line in show_out.splitlines():
+            if line.startswith("Location:"):
+                site_dirs = [line.split(":", 1)[1].strip()]
+                break
+
+        packages = []
+        for p in data:
+            name, version = p["name"], p["version"]
+            install_date = source = None
+            for sp in site_dirs:
+                matches = glob.glob(os.path.join(sp, f"{name}-{version}.dist-info"))
+                if not matches:
+                    matches = glob.glob(os.path.join(sp, f"{name.replace('-', '_')}-{version}.dist-info"))
+                if matches:
+                    try:
+                        install_date = datetime.fromtimestamp(
+                            os.path.getmtime(matches[0])
+                        ).strftime("%Y-%m-%d")
+                    except OSError:
+                        pass
+                    source = "pypi.org"
+                    break
+            packages.append(Package(name=name, version=version, manager=self.name, install_date=install_date, source=source))
+        return packages
 
     async def update(self, name: str) -> bool:
         _, _, code = await run_command([self._cmd, "install", "--upgrade", name])

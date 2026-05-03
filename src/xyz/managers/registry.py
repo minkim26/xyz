@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from .base import BaseManager, Package
+from .brew import BrewManager
 from .npm import NpmManager
 from .pip import PipManager
 
@@ -41,7 +42,7 @@ class ManagerRegistry:
 
 def _detect_managers() -> list[BaseManager]:
     detected: list[BaseManager] = []
-    for manager in (PipManager(), NpmManager()):
+    for manager in (PipManager(), NpmManager(), BrewManager()):
         if manager.is_available():
             detected.append(manager)
     return detected

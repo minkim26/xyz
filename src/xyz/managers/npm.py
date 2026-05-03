@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+from datetime import datetime
+from urllib.parse import urlparse
 
 from .base import BaseManager, Package
 from ._subprocess import run_command
@@ -23,14 +26,25 @@ class NpmManager(BaseManager):
         except json.JSONDecodeError:
             return []
         deps = raw.get("dependencies") or {}
-        return [
-            Package(
-                name=pkg_name,
-                version=info.get("version", "") if isinstance(info, dict) else "",
-                manager=self.name,
-            )
-            for pkg_name, info in deps.items()
-        ]
+        packages = []
+        for pkg_name, info in deps.items():
+            version = info.get("version", "") if isinstance(info, dict) else ""
+            pkg_path = info.get("path", "") if isinstance(info, dict) else ""
+            resolved = info.get("resolved", "") if isinstance(info, dict) else ""
+            install_date = source = None
+            if pkg_path and os.path.isdir(pkg_path):
+                try:
+                    install_date = datetime.fromtimestamp(
+                        os.path.getmtime(pkg_path)
+                    ).strftime("%Y-%m-%d")
+                except OSError:
+                    pass
+            try:
+                source = urlparse(resolved).netloc or "npmjs.com"
+            except Exception:
+                source = "npmjs.com"
+            packages.append(Package(name=pkg_name, version=version, manager=self.name, install_date=install_date, source=source))
+        return packages
 
     async def update(self, name: str) -> bool:
         _, _, code = await run_command(["npm", "update", "-g", name])
