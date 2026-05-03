@@ -234,7 +234,14 @@ class XYZApp(App):
         table.clear()
         for pkg in self._filtered:
             tag = "[yellow]orphan[/yellow]" if pkg.is_orphan else ""
-            table.add_row(pkg.name, pkg.manager, pkg.version, pkg.size, tag, key=pkg.name)
+            table.add_row(
+                pkg.name,
+                pkg.manager,
+                pkg.version,
+                pkg.formatted_size(),
+                tag,
+                key=pkg.name,
+            )
 
         detail = self.query_one(DetailPane)
         if not self._filtered:
