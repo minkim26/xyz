@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-MODEL = "gemini-2.0-flash"
+MODEL = "gemini-2.5-flash-lite"
 DEFAULT_TEMPERATURE = 0.3
-DEFAULT_MAX_TOKENS = 512
+DEFAULT_MAX_TOKENS = 8192
 
 
 class GeminiClient:
@@ -110,7 +110,7 @@ class GeminiClient:
 
         except Exception as exc:
             error_str = str(exc).lower()
-            if "rate" in error_str or "quota" in error_str or "429" in error_str:
+            if "rate limit" in error_str or "quota exceeded" in error_str or "429" in error_str:
                 logger.warning("Gemini rate limit hit: %s", exc)
                 return (
                     "Rate limit reached -- please wait a moment and try again."
