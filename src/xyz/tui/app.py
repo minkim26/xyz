@@ -670,10 +670,14 @@ class XYZApp(App):
         query = event.value.strip()
         if not query.startswith("?"):
             return
-        self.query_one(DetailPane).show_empty("Asking Gemini…")
+        
+        self.query_one(DetailPane).show_empty("Searching by intent…")
+        self._start_ai_spinner()
+        
         try:
             package_names = [p.name for p in self._all_packages]
             matches = await natural_language_search(query[1:].strip(), package_names)
+            self._stop_ai_spinner()
             matched_pkgs = [p for p in self._all_packages if p.name in matches]
             self._display_rows = matched_pkgs
             self._rebuild_table()
@@ -681,6 +685,7 @@ class XYZApp(App):
             if not matched_pkgs:
                 self.query_one(DetailPane).show_empty("No AI matches found.")
         except Exception as exc:
+            self._stop_ai_spinner()
             self.query_one(DetailPane).show_empty(f"AI search error: {exc}")
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
