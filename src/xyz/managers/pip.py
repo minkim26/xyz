@@ -62,9 +62,10 @@ class PipManager(BaseManager):
         return packages
 
     async def update(self, name: str, dry_run: bool = False) -> tuple[bool, str]:
-        cmd = [self._cmd, "install", "--upgrade", name]
+        import sys
+        cmd = [sys.executable, "-m", "pip", "install", "--upgrade", name]
         if dry_run:
-            cmd.insert(2, "--dry-run")
+            cmd.insert(4, "--dry-run")
         stdout, stderr, code = await run_command(cmd)
         return code == 0, f"{stdout}\n{stderr}".strip()
 
