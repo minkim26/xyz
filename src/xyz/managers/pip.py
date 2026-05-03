@@ -14,19 +14,21 @@ from ._subprocess import run_command
 
 class PipManager(BaseManager):
     def __init__(self) -> None:
-        self._cmd = "pip3" if shutil.which("pip3") else "pip"
+        import sys
+        self._cmd = [sys.executable, "-m", "pip"]
 
     @property
     def name(self) -> str:
         return "pip"
 
     def is_available(self) -> bool:
-        return shutil.which("pip3") is not None or shutil.which("pip") is not None
+        import importlib.util
+        return importlib.util.find_spec("pip") is not None
 
     async def list(self) -> builtins.list[Package]:
         (list_out, _, rc), (show_out, _, _) = await asyncio.gather(
-            run_command([self._cmd, "list", "--format=json"]),
-            run_command([self._cmd, "show", "pip"]),
+            run_command([*self._cmd, "list", "--format=json"]),
+            run_command([*self._cmd, "show", "pip"]),
         )
         if rc != 0:
             return []
@@ -72,11 +74,11 @@ class PipManager(BaseManager):
     async def delete(self, name: str, dry_run: bool = False) -> tuple[bool, str]:
         if dry_run:
             return True, f"Would uninstall {name} and its unneeded dependencies."
-        stdout, stderr, code = await run_command([self._cmd, "uninstall", "-y", name])
+        stdout, stderr, code = await run_command([*self._cmd, "uninstall", "-y", name])
         return code == 0, f"{stdout}\n{stderr}".strip()
 
     async def get_deps(self, name: str) -> tuple[list[str], list[str]]:
-        stdout, _, rc = await run_command([self._cmd, "show", name])
+        stdout, _, rc = await run_command([*self._cmd, "show", name])
         if rc != 0:
             return [], []
         requires: list[str] = []
