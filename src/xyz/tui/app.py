@@ -1,8 +1,42 @@
 from __future__ import annotations
 
 import asyncio
+import re
+import subprocess
 from collections import Counter
 from typing import Optional
+
+try:
+    from mermaid_ascii import _resolve_binary as _mermaid_binary
+    _MERMAID_BIN: str | None = _mermaid_binary()
+except Exception:
+    _MERMAID_BIN = None
+
+
+def _build_mermaid(name: str, requires: list[str], required_by: list[str]) -> str:
+    safe = lambda s: re.sub(r"[^a-zA-Z0-9]", "_", s)
+    lines = ["graph LR"]
+    pkg = safe(name)
+    for dep in requires:
+        lines.append(f"    {pkg} --> {safe(dep)}")
+    for rev in required_by:
+        lines.append(f"    {safe(rev)} --> {pkg}")
+    if not requires and not required_by:
+        lines.append(f"    {pkg}[{name}]")
+    return "\n".join(lines)
+
+
+async def _render_graph(mermaid_str: str) -> str:
+    if not _MERMAID_BIN:
+        return ""
+    result = await asyncio.to_thread(
+        subprocess.run,
+        [_MERMAID_BIN],
+        input=mermaid_str,
+        text=True,
+        capture_output=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else ""
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -106,6 +140,11 @@ class DetailPane(Widget):
     #dp-ai-scroll {
         height: 1fr;
     }
+    #dp-graph {
+        padding: 1 2;
+        height: auto;
+        border-bottom: solid $surface;
+    }
     #dp-ai {
         padding: 1 2;
         height: auto;
@@ -119,6 +158,7 @@ class DetailPane(Widget):
             yield Button("↑\nupdate", id="btn-detail-update", variant="primary")
             yield Button("✕\nremove", id="btn-detail-remove", variant="error")
         with VerticalScroll(id="dp-ai-scroll"):
+            yield Static("", id="dp-graph")
             yield Static("", id="dp-ai")
 
     def on_mount(self) -> None:
@@ -127,8 +167,12 @@ class DetailPane(Widget):
     def show_empty(self, msg: str = "Select a package to see details.") -> None:
         self.query_one("#dp-header", Static).update(f"[dim]{msg}[/dim]")
         self.query_one("#dp-meta", Static).update("")
+        self.query_one("#dp-graph", Static).update("")
         self.query_one("#dp-ai", Static).update("")
         self.query_one("#dp-actions").display = False
+
+    def show_graph(self, content: str) -> None:
+        self.query_one("#dp-graph", Static).update(content)
 
     def show_package(
         self,
@@ -213,6 +257,41 @@ class ConfirmDeleteModal(ModalScreen[bool]):
 
 
 # ---------------------------------------------------------------------------
+# Dependency graph modal
+# ---------------------------------------------------------------------------
+
+class GraphModal(ModalScreen):
+    DEFAULT_CSS = """
+    GraphModal { align: center middle; }
+    #graph-box {
+        width: 90%; height: 80%;
+        border: thick $primary; background: $surface; padding: 1 2;
+    }
+    #graph-title { text-align: center; text-style: bold; margin-bottom: 1; }
+    #graph-scroll { height: 1fr; }
+    #graph-content { height: auto; }
+    #graph-hint { text-align: center; color: $text-muted; margin-top: 1; }
+    """
+
+    BINDINGS = [Binding("escape,g,q", "dismiss", show=False)]
+
+    def __init__(self, pkg_name: str, ascii_art: str) -> None:
+        super().__init__()
+        self._pkg_name = pkg_name
+        self._ascii_art = ascii_art
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="graph-box"):
+            yield Label(f"Dependencies — {self._pkg_name}", id="graph-title")
+            with VerticalScroll(id="graph-scroll"):
+                yield Static(self._ascii_art, id="graph-content")
+            yield Label("[dim]esc / g to close[/dim]", id="graph-hint")
+
+    def action_dismiss(self) -> None:
+        self.dismiss()
+
+
+# ---------------------------------------------------------------------------
 # Main app
 # ---------------------------------------------------------------------------
 
@@ -226,9 +305,10 @@ class XYZApp(App):
         Binding("o",      "toggle_orphans", "o orphans",     show=False),
         Binding("m",      "cycle_manager",  "m manager",     show=False),
         Binding("a",      "ask_ai",         "a AI",          show=False),
+        Binding("g",      "view_graph",     "g graph",       show=False),
         Binding("/",      "focus_search",   "/ search",      show=False),
         Binding("escape", "blur_search",    "esc back",      show=False),
-        Binding("q",      "quit",           "q quit",        show=False),
+        Binding("ctrl+q", "quit",           "ctrl+q quit",   show=False),
     ]
 
     DEFAULT_CSS = """
@@ -271,8 +351,6 @@ class XYZApp(App):
         margin: 0 0 0 1;
         color: white;
     }
-    .pill-active { text-style: bold underline; }
-
     /* per-manager pill colours */
     #pill-pip    { background: #3B82F6; border: round #3B82F6; }
     #pill-npm    { background: #22C55E; border: round #22C55E; }
@@ -280,6 +358,14 @@ class XYZApp(App):
     #pill-apt    { background: #EAB308; border: round #EAB308; color: black; }
     #pill-bun    { background: #F97316; border: round #F97316; }
     #pill-pacman { background: #A855F7; border: round #A855F7; }
+
+    /* active pill — white border only */
+    #pill-pip.pill-active    { border: round white; }
+    #pill-npm.pill-active    { border: round white; }
+    #pill-brew.pill-active   { border: round white; }
+    #pill-apt.pill-active    { border: round white; }
+    #pill-bun.pill-active    { border: round white; }
+    #pill-pacman.pill-active { border: round white; }
 
     /* pill hover — darken each colour */
     #pill-pip:hover    { background: #2563EB; border: round #2563EB; }
@@ -329,6 +415,8 @@ class XYZApp(App):
         self._ai_task: Optional[asyncio.Task] = None
         self._spinner_timer = None
         self._spinner_frame: int = 0
+        self._graph_task: Optional[asyncio.Task] = None
+        self._current_graph_ascii: str = ""
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="search-row"):
@@ -341,7 +429,7 @@ class XYZApp(App):
             yield DetailPane(id="detail-pane")
         yield Static("", id="stats-bar")
         yield Static(
-            "↑↓ navigate   u update   d delete   a AI   o orphans   m manager   / search   q quit",
+            "↑↓ navigate   u update   d delete   a AI   g graph   o orphans   m manager   / search   ctrl+q quit",
             id="key-bar",
         )
 
@@ -435,7 +523,10 @@ class XYZApp(App):
         self._selected = pkg
         if self._ai_task and not self._ai_task.done():
             self._ai_task.cancel()
+        if self._graph_task and not self._graph_task.done():
+            self._graph_task.cancel()
         self.query_one(DetailPane).show_package(pkg, self._dupe_names)
+        self._graph_task = asyncio.create_task(self._fetch_graph(pkg))
 
     def _kick_ai(self, pkg: Package) -> None:
         if self._ai_task and not self._ai_task.done():
@@ -484,6 +575,42 @@ class XYZApp(App):
                     pkg, self._dupe_names, ai_text=f"[red]Error: {exc}[/red]"
                 )
 
+    async def _fetch_graph(self, pkg: Package) -> None:
+        detail = self.query_one(DetailPane)
+        self._current_graph_ascii = ""
+        detail.show_graph("[dim]Loading dependencies…[/dim]")
+        try:
+            manager = self._managers_registry.get_manager(pkg.manager)
+            if manager is None:
+                detail.show_graph("")
+                return
+            requires, required_by = await manager.get_deps(pkg.name)
+            if self._selected and self._selected.name != pkg.name:
+                return
+            if not requires and not required_by:
+                detail.show_graph("[dim]No dependency data available.[/dim]")
+                return
+            mermaid_str = _build_mermaid(pkg.name, requires, required_by)
+            ascii_art = await _render_graph(mermaid_str)
+            if self._selected and self._selected.name != pkg.name:
+                return
+            if ascii_art:
+                self._current_graph_ascii = ascii_art
+                n_req = len(requires)
+                n_rev = len(required_by)
+                detail.show_graph(
+                    f"[bold]DEPENDENCIES[/bold]  "
+                    f"[dim]{n_req} requires · {n_rev} required by[/dim]  "
+                    f"[dim]press G to view[/dim]"
+                )
+            else:
+                detail.show_graph("[dim]Graph rendering unavailable.[/dim]")
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            if self._selected and self._selected.name == pkg.name:
+                detail.show_graph(f"[dim]Graph error: {exc}[/dim]")
+
     # ── events ───────────────────────────────────────────────────────────────
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
@@ -530,6 +657,13 @@ class XYZApp(App):
 
     def action_blur_search(self) -> None:
         self.query_one("#package-list", DataTable).focus()
+
+    def action_view_graph(self) -> None:
+        if not self._current_graph_ascii:
+            self.notify("No graph available — select a package first.", severity="warning")
+            return
+        name = self._selected.name if self._selected else "Package"
+        self.push_screen(GraphModal(name, self._current_graph_ascii))
 
     def action_ask_ai(self) -> None:
         if not self._selected:

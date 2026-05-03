@@ -74,5 +74,15 @@ class BrewManager(BaseManager):
         _, _, code = await run_command(["brew", "uninstall", name])
         return code == 0
 
+    async def get_deps(self, name: str) -> tuple[list[str], list[str]]:
+        import asyncio as _asyncio
+        (deps_out, _, _), (uses_out, _, _) = await _asyncio.gather(
+            run_command(["brew", "deps", name]),
+            run_command(["brew", "uses", "--installed", name]),
+        )
+        requires = [x.strip() for x in deps_out.splitlines() if x.strip()]
+        required_by = [x.strip() for x in uses_out.splitlines() if x.strip()]
+        return requires, required_by
+
     async def check_orphans(self) -> list[Package]:
         return []

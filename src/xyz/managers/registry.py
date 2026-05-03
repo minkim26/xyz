@@ -22,6 +22,9 @@ class ManagerRegistry:
         self._managers = managers if managers is not None else _detect_managers()
         self._timeout = timeout
 
+    def get_manager(self, name: str) -> BaseManager | None:
+        return next((m for m in self._managers if m.name == name), None)
+
     async def scan_all(self) -> list[Package]:
         tasks = [
             asyncio.wait_for(m.list(), timeout=self._timeout)
