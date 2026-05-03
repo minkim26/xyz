@@ -50,12 +50,15 @@ from textual.widgets import Button, DataTable, Input, Label, Static
 from xyz.managers import Package, ManagerRegistry
 
 try:
-    from xyz.ai import explain_package, assess_orphan_risk, natural_language_search, smart_cleanup
+    from xyz.ai import (
+        stream_explain_package, stream_assess_orphan_risk,
+        natural_language_search, smart_cleanup,
+    )
 except ImportError:
-    async def explain_package(_name: str, _manager: str, _version: str) -> str:  # type: ignore[misc]
-        return "AI unavailable — check GEMINI_API_KEY and dependencies."
-    async def assess_orphan_risk(_name: str, _manager: str) -> str:  # type: ignore[misc]
-        return "AI unavailable — check GEMINI_API_KEY and dependencies."
+    async def stream_explain_package(_name: str, _manager: str, _version: str):  # type: ignore[misc]
+        yield "AI unavailable — check GEMINI_API_KEY and dependencies."
+    async def stream_assess_orphan_risk(_name: str, _manager: str):  # type: ignore[misc]
+        yield "AI unavailable — check GEMINI_API_KEY and dependencies."
     async def natural_language_search(_query: str, _package_names: list[str]) -> list[str]:  # type: ignore[misc]
         return []
     async def smart_cleanup(_packages: list) -> list:  # type: ignore[misc]
@@ -736,13 +739,26 @@ class XYZApp(App):
 
     async def _fetch_ai(self, pkg: Package) -> None:
         try:
-            if pkg.is_orphan:
-                text = await assess_orphan_risk(pkg.name, pkg.manager)
-            else:
-                text = await explain_package(pkg.name, pkg.manager, pkg.version)
-            self._stop_ai_spinner()
-            if self._selected and self._selected.name == pkg.name:
-                self.query_one(DetailPane).show_package(pkg, self._dupe_names, ai_text=text)
+            accumulated = ""
+            spinner_stopped = False
+            stream = (
+                stream_assess_orphan_risk(pkg.name, pkg.manager)
+                if pkg.is_orphan
+                else stream_explain_package(pkg.name, pkg.manager, pkg.version)
+            )
+            async for chunk in stream:
+                if self._selected and self._selected.name != pkg.name:
+                    return
+                if not spinner_stopped:
+                    self._stop_ai_spinner()
+                    spinner_stopped = True
+                accumulated += chunk
+                try:
+                    self.query_one("#dp-ai", Static).update(
+                        f"{_gemini_header()}\n\n{accumulated}"
+                    )
+                except Exception:
+                    pass
         except asyncio.CancelledError:
             self._stop_ai_spinner()
         except Exception as exc:
