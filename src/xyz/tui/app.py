@@ -11,10 +11,10 @@ from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Sta
 
 try:
     from xyz.managers import Package, ManagerRegistry
-    from xyz.ai import explain_package, assess_orphan_risk
+    from xyz.ai import explain_package, assess_orphan_risk, natural_language_search
 except ImportError:
     from managers import Package, ManagerRegistry  # type: ignore[no-redef]
-    from ai import explain_package, assess_orphan_risk  # type: ignore[no-redef]
+    from ai import explain_package, assess_orphan_risk, natural_language_search  # type: ignore[no-redef]
 
 
 # ---------------------------------------------------------------------------
@@ -27,6 +27,7 @@ class DetailPane(Static):
         padding: 1 2;
         height: 100%;
         background: $panel;
+        overflow-y: auto;
     }
     """
 
@@ -36,12 +37,14 @@ class DetailPane(Static):
     def show_empty(self) -> None:
         self.update("[dim]Select a package to see details.[/dim]")
 
-    def show_package(self, pkg: Package, ai_text: str = "") -> None:
+    def show_package(self, pkg: Package, ai_text: str = "", ai_loading: bool = False) -> None:
         orphan_badge = "\n[yellow bold]⚠  Orphaned[/yellow bold]" if pkg.is_orphan else ""
         if ai_text:
             ai_block = f"\n\n[bold cyan]AI Explanation[/bold cyan]\n{ai_text}"
-        else:
+        elif ai_loading:
             ai_block = "\n\n[bold cyan]AI Explanation[/bold cyan]\n[dim]Loading…[/dim]"
+        else:
+            ai_block = "\n\n[bold cyan]AI Explanation[/bold cyan]\n[dim]Press 'a' to generate insights[/dim]"
 
         self.update(
             f"[bold white]{pkg.name}[/bold white]\n"
@@ -129,6 +132,7 @@ class XYZApp(App):
         Binding("U",      "upgrade_all",    "Upgrade All", show=True),
         Binding("o",      "toggle_orphans", "Orphans",     show=True),
         Binding("m",      "cycle_manager",  "Manager",     show=True),
+        Binding("a",      "ask_ai",         "Ask AI",      show=True),
         Binding("/",      "focus_search",   "Search",      show=True),
         Binding("escape", "blur_search",    "Back",        show=False),
         Binding("q",      "quit",           "Quit",        show=True),
@@ -254,8 +258,13 @@ class XYZApp(App):
             return
         pkg = self._filtered[row]
         self._selected = pkg
+        
+        # Cancel any previous AI task that might still be running
+        if self._ai_task and not self._ai_task.done():
+            self._ai_task.cancel()
+            
+        # Just show the basic package details (wait for manual AI trigger)
         self.query_one(DetailPane).show_package(pkg)
-        self._kick_ai(pkg)
 
     def _kick_ai(self, pkg: Package) -> None:
         if self._ai_task and not self._ai_task.done():
@@ -284,10 +293,38 @@ class XYZApp(App):
     def on_input_changed(self, _: Input.Changed) -> None:
         self._apply_filters()
 
+    async def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "search-input":
+            query = event.value.strip()
+            if query.startswith("?"):
+                self.query_one(DetailPane).update("[dim]Asking Gemini to find packages...[/dim]")
+                package_names = [p.name for p in self._all_packages]
+                
+                try:
+                    matches = await natural_language_search(query[1:].strip(), package_names)
+                    self._filtered = [p for p in self._all_packages if p.name in matches]
+                    self._rebuild_table()
+                    
+                    if matches:
+                        self.query_one(DetailPane).update(f"[bold cyan]AI Search Found {len(matches)} matches![/bold cyan]\nSelect one to view details.")
+                    else:
+                        self.query_one(DetailPane).update("[yellow]AI could not find any relevant packages.[/yellow]")
+                except Exception as e:
+                    self.query_one(DetailPane).update(f"[red]AI Search Error: {e}[/red]")
+
     # ── actions ──────────────────────────────────────────────────────────────
 
     def action_focus_search(self) -> None:
         self.query_one("#search-input", Input).focus()
+
+    def action_ask_ai(self) -> None:
+        if not self._selected:
+            self.notify("No package selected.", severity="warning")
+            return
+            
+        # Update UI to show loading state
+        self.query_one(DetailPane).show_package(self._selected, ai_loading=True)
+        self._kick_ai(self._selected)
 
     def action_blur_search(self) -> None:
         inp = self.query_one("#search-input", Input)
