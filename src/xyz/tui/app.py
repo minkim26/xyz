@@ -50,13 +50,15 @@ from textual.widgets import Button, DataTable, Input, Label, Static
 from xyz.managers import Package, ManagerRegistry
 
 try:
-    from xyz.ai import explain_package, assess_orphan_risk, natural_language_search
+    from xyz.ai import explain_package, assess_orphan_risk, natural_language_search, smart_cleanup
 except ImportError:
     async def explain_package(_name: str, _manager: str, _version: str) -> str:  # type: ignore[misc]
         return "AI unavailable — check GEMINI_API_KEY and dependencies."
     async def assess_orphan_risk(_name: str, _manager: str) -> str:  # type: ignore[misc]
         return "AI unavailable — check GEMINI_API_KEY and dependencies."
     async def natural_language_search(_query: str, _package_names: list[str]) -> list[str]:  # type: ignore[misc]
+        return []
+    async def smart_cleanup(_packages: list) -> list:  # type: ignore[misc]
         return []
 
 
@@ -337,6 +339,91 @@ class GraphModal(ModalScreen):
 
 
 # ---------------------------------------------------------------------------
+# Smart cleanup modal
+# ---------------------------------------------------------------------------
+
+class CleanupModal(ModalScreen):
+    DEFAULT_CSS = """
+    CleanupModal { align: center middle; }
+    #cleanup-box {
+        width: 90%; height: 80%;
+        border: thick $primary; background: $surface; padding: 1 2;
+    }
+    #cleanup-title   { text-align: center; text-style: bold; margin-bottom: 1; }
+    #cleanup-summary { height: auto; margin-bottom: 1; }
+    #cleanup-table   { height: 1fr; }
+    #cleanup-hint    { text-align: center; color: $text-muted; margin-top: 1; }
+    """
+
+    BINDINGS = [
+        Binding("d,enter", "select_package", show=False),
+        Binding("escape,c", "dismiss_modal", show=False),
+    ]
+
+    def __init__(self, recommendations: list[dict], total_scanned: int) -> None:
+        super().__init__()
+        self._recs = recommendations
+        self._total = total_scanned
+
+    def compose(self) -> ComposeResult:
+        remove_count = sum(1 for r in self._recs if r.get("verdict") == "remove")
+        review_count = sum(1 for r in self._recs if r.get("verdict") == "review")
+        with Vertical(id="cleanup-box"):
+            yield Label(f"{_gemini_header()}  Smart Cleanup", id="cleanup-title")
+            if not self._recs:
+                yield Static(
+                    f"[dim]Analyzed {self._total} packages[/dim]\n\n"
+                    "[bold green]✓ Everything looks healthy — no cleanup needed.[/bold green]",
+                    id="cleanup-summary",
+                )
+                yield Label("[dim]esc to close[/dim]", id="cleanup-hint")
+            else:
+                yield Static(
+                    f"[dim]Analyzed {self._total} packages  ·  "
+                    f"[red]{remove_count} flagged for removal[/red]  ·  "
+                    f"[yellow]{review_count} to review[/yellow][/dim]",
+                    id="cleanup-summary",
+                )
+                yield DataTable(id="cleanup-table", cursor_type="row", zebra_stripes=True)
+                yield Label(
+                    "[dim]↑↓ navigate   d / enter to delete selected   esc to close[/dim]",
+                    id="cleanup-hint",
+                )
+
+    def on_mount(self) -> None:
+        if not self._recs:
+            return
+        table = self.query_one("#cleanup-table", DataTable)
+        table.add_columns("VERDICT", "PACKAGE", "MANAGER", "REASON")
+        for i, rec in enumerate(self._recs):
+            verdict = rec.get("verdict", "review")
+            verdict_markup = "[red]● remove[/red]" if verdict == "remove" else "[yellow]⚠ review[/yellow]"
+            color = _mgr_color(rec.get("manager", ""))
+            table.add_row(
+                verdict_markup,
+                f"[bold]{rec.get('name', '')}[/bold]",
+                f"[{color}]{rec.get('manager', '')}[/{color}]",
+                f"[dim]{rec.get('reason', '')}[/dim]",
+                key=str(i),
+            )
+
+    def action_select_package(self) -> None:
+        if not self._recs:
+            return
+        try:
+            row = self.query_one("#cleanup-table", DataTable).cursor_row
+            if 0 <= row < len(self._recs):
+                self.dismiss(self._recs[row])
+                return
+        except Exception:
+            pass
+        self.dismiss(None)
+
+    def action_dismiss_modal(self) -> None:
+        self.dismiss(None)
+
+
+# ---------------------------------------------------------------------------
 # Main app
 # ---------------------------------------------------------------------------
 
@@ -351,6 +438,7 @@ class XYZApp(App):
         Binding("m",      "cycle_manager",  "m manager",     show=False),
         Binding("a",      "ask_ai",         "a AI",          show=False),
         Binding("g",      "view_graph",     "g graph",       show=False),
+        Binding("c",      "smart_cleanup",  "c cleanup",     show=False),
         Binding("/",      "focus_search",   "/ search",      show=False),
         Binding("escape", "blur_search",    "esc back",      show=False),
         Binding("ctrl+q", "quit",           "ctrl+q quit",   show=False),
@@ -474,7 +562,7 @@ class XYZApp(App):
             yield DetailPane(id="detail-pane")
         yield Static("", id="stats-bar")
         yield Static(
-            "↑↓ navigate   u update   d delete   a AI   g graph   o orphans   m manager   / search   ? AI search   ctrl+q quit",
+            "↑↓ navigate   u update   d delete   a AI   g graph   o orphans   m manager   / search   ctrl+q quit",
             id="key-bar",
         )
 
@@ -795,6 +883,48 @@ class XYZApp(App):
             if success:
                 self.notify(f"Successfully deleted {pkg.name}\n[dim]{output}[/dim]", title="Delete Success")
                 self._all_packages = [p for p in self._all_packages if not (p.name == pkg.name and p.manager == pkg.manager)]
+                self._apply_filters()
+            else:
+                self.notify(f"Failed to delete {pkg.name}\n{output}", title="Delete Error", severity="error")
+
+    @work
+    async def action_smart_cleanup(self) -> None:
+        if not self._all_packages:
+            self.notify("No packages loaded yet.", severity="warning")
+            return
+        self.notify(f"Analyzing {len(self._all_packages)} packages with Gemini…", title="Smart Cleanup")
+        try:
+            pkg_dicts = [
+                {"name": p.name, "manager": p.manager, "version": p.version}
+                for p in self._all_packages
+            ]
+            recs = await smart_cleanup(pkg_dicts, dupe_names=self._dupe_names)
+        except Exception as exc:
+            self.notify(f"Cleanup analysis failed: {exc}", severity="error")
+            return
+
+        result: Optional[dict] = await self.push_screen_wait(CleanupModal(recs, len(self._all_packages)))
+        if result is None:
+            return
+
+        pkg = next(
+            (p for p in self._all_packages if p.name == result["name"] and p.manager == result["manager"]),
+            None,
+        )
+        if pkg is None:
+            self.notify("Package not found in list.", severity="warning")
+            return
+
+        confirmed: bool = await self.push_screen_wait(ConfirmDeleteModal(pkg))
+        if confirmed:
+            self.notify(f"Deleting [bold]{pkg.name}[/bold]…", title="Delete", severity="warning")
+            success, output = await self._managers_registry.delete(pkg)
+            if success:
+                self.notify(f"Successfully deleted {pkg.name}", title="Delete Success")
+                self._all_packages = [
+                    p for p in self._all_packages
+                    if not (p.name == pkg.name and p.manager == pkg.manager)
+                ]
                 self._apply_filters()
             else:
                 self.notify(f"Failed to delete {pkg.name}\n{output}", title="Delete Error", severity="error")

@@ -9,6 +9,7 @@ the shared :class:`GeminiClient` singleton automatically.
 from __future__ import annotations
 
 from xyz.ai.client import GeminiClient
+from xyz.ai.cleanup import smart_cleanup as _cleanup
 from xyz.ai.explainer import explain_package as _explain
 from xyz.ai.orphan import assess_orphan_risk as _assess
 from xyz.ai.search import natural_language_search as _nl_search
@@ -46,9 +47,20 @@ async def natural_language_search(query: str, package_names: list[str]) -> list[
     return await _nl_search(client, query, package_names)
 
 
+async def smart_cleanup(packages: list[dict], dupe_names: set[str] | None = None) -> list[dict]:
+    """Analyze all installed packages and return cleanup recommendations.
+
+    Each dict has: name, manager, verdict ("remove"|"review"), reason.
+    Returns [] when AI is unavailable or nothing actionable is found.
+    """
+    client = GeminiClient.get_instance()
+    return await _cleanup(client, packages, dupe_names=dupe_names)
+
+
 __all__ = [
     "GeminiClient",
     "explain_package",
     "assess_orphan_risk",
     "natural_language_search",
+    "smart_cleanup",
 ]
