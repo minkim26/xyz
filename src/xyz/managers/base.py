@@ -47,3 +47,7 @@ class BaseManager(ABC):
 
     @abstractmethod
     async def check_orphans(self) -> list[Package]: ...
+
+    async def get_deps(self, name: str) -> tuple[list[str], list[str]]:
+        """Return (requires, required_by). Override in managers that support it."""
+        return [], []

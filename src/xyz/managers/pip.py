@@ -68,5 +68,20 @@ class PipManager(BaseManager):
         _, _, code = await run_command([self._cmd, "uninstall", "-y", name])
         return code == 0
 
+    async def get_deps(self, name: str) -> tuple[list[str], list[str]]:
+        stdout, _, rc = await run_command([self._cmd, "show", name])
+        if rc != 0:
+            return [], []
+        requires: list[str] = []
+        required_by: list[str] = []
+        for line in stdout.splitlines():
+            if line.startswith("Requires:"):
+                val = line.split(":", 1)[1].strip()
+                requires = [x.strip() for x in val.split(",") if x.strip()]
+            elif line.startswith("Required-by:"):
+                val = line.split(":", 1)[1].strip()
+                required_by = [x.strip() for x in val.split(",") if x.strip()]
+        return requires, required_by
+
     async def check_orphans(self) -> list[Package]:
         return []  # Stretch: Hours 16-20
