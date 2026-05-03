@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-MODEL = "gemini-2.0-flash-lite"
+MODEL = "gemini-2.5-flash-lite"
 DEFAULT_TEMPERATURE = 0.3
 DEFAULT_MAX_TOKENS = 8192
 
