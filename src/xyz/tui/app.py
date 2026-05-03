@@ -709,26 +709,27 @@ class XYZApp(App):
         if not self._selected:
             self.notify("No package selected.", severity="warning")
             return
-        self.notify(f"Updating [bold]{self._selected.name}[/bold]…", title="Update")
-        success, output = await self._managers_registry.update(self._selected)
+        pkg = self._selected
+        self.notify(f"Updating [bold]{pkg.name}[/bold]…", title="Update")
+        success, output = await self._managers_registry.update(pkg)
         if success:
-            self.notify(f"Successfully updated {self._selected.name}\n[dim]{output}[/dim]", title="Update Success")
+            self.notify(f"Successfully updated {pkg.name}\n[dim]{output}[/dim]", title="Update Success")
         else:
-            self.notify(f"Failed to update {self._selected.name}\n{output}", title="Update Error", severity="error")
+            self.notify(f"Failed to update {pkg.name}\n{output}", title="Update Error", severity="error")
 
     @work
     async def action_delete_package(self) -> None:
         if not self._selected:
             self.notify("No package selected.", severity="warning")
             return
-        confirmed: bool = await self.push_screen_wait(ConfirmDeleteModal(self._selected))
+        pkg = self._selected
+        confirmed: bool = await self.push_screen_wait(ConfirmDeleteModal(pkg))
         if confirmed:
-            pkg = self._selected
             self.notify(f"Deleting [bold]{pkg.name}[/bold]…", title="Delete", severity="warning")
             success, output = await self._managers_registry.delete(pkg)
             if success:
                 self.notify(f"Successfully deleted {pkg.name}\n[dim]{output}[/dim]", title="Delete Success")
-                self._all_packages = [p for p in self._all_packages if p.name != pkg.name]
+                self._all_packages = [p for p in self._all_packages if not (p.name == pkg.name and p.manager == pkg.manager)]
                 self._apply_filters()
             else:
                 self.notify(f"Failed to delete {pkg.name}\n{output}", title="Delete Error", severity="error")

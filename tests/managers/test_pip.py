@@ -71,6 +71,18 @@ async def test_delete_returns_false_on_failure(manager, fake_subprocess):
     assert result == (False, "")
 
 
+async def test_update_propagates_output(manager, fake_subprocess):
+    with fake_subprocess("xyz.managers.pip", returncode=0, stdout="success output", stderr="some warning"):
+        result = await manager.update("requests")
+    assert result == (True, "success output\nsome warning")
+
+
+async def test_delete_propagates_output(manager, fake_subprocess):
+    with fake_subprocess("xyz.managers.pip", returncode=1, stdout="", stderr="error removing"):
+        result = await manager.delete("requests")
+    assert result == (False, "error removing")
+
+
 async def test_check_orphans_stub_returns_empty(manager):
     result = await manager.check_orphans()
     assert result == []
