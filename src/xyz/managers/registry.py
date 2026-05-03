@@ -42,16 +42,16 @@ class ManagerRegistry:
                 logger.warning("Manager %s scan failed: %s", manager.name, result)
         return packages
 
-    async def update(self, pkg: Package) -> tuple[bool, str]:
+    async def update(self, pkg: Package, dry_run: bool = False) -> tuple[bool, str]:
         for manager in self._managers:
             if manager.name == pkg.manager:
-                return await manager.update(pkg.name)
+                return await manager.update(pkg.name, dry_run=dry_run)
         return False, f"Manager {pkg.manager} not found."
 
-    async def delete(self, pkg: Package) -> tuple[bool, str]:
+    async def delete(self, pkg: Package, dry_run: bool = False) -> tuple[bool, str]:
         for manager in self._managers:
             if manager.name == pkg.manager:
-                return await manager.delete(pkg.name)
+                return await manager.delete(pkg.name, dry_run=dry_run)
         return False, f"Manager {pkg.manager} not found."
 
 

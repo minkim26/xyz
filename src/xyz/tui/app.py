@@ -227,32 +227,75 @@ class ConfirmDeleteModal(ModalScreen[bool]):
     DEFAULT_CSS = """
     ConfirmDeleteModal { align: center middle; }
     #modal-box {
-        width: 58; height: auto;
+        width: 58; height: auto; max-height: 80%;
         border: thick $error; background: $surface; padding: 1 2;
     }
     #modal-title { text-align: center; color: $error; text-style: bold; margin-bottom: 1; }
     #modal-pkg   { text-align: center; margin-bottom: 1; }
     #modal-hint  { text-align: center; margin-bottom: 1; }
+    #modal-output { background: $panel; padding: 1; margin-bottom: 1; height: auto; max-height: 10; }
     #modal-buttons { layout: horizontal; align: center middle; height: 3; }
     #modal-buttons Button { margin: 0 2; }
     """
 
-    def __init__(self, pkg: Package) -> None:
+    def __init__(self, pkg: Package, dry_run_output: str = "") -> None:
         super().__init__()
         self.pkg = pkg
+        self.dry_run_output = dry_run_output
 
     def compose(self) -> ComposeResult:
         with Vertical(id="modal-box"):
-            yield Label("Delete Package", id="modal-title")
+            yield Label("Delete Package (Preview)", id="modal-title")
             yield Label(
                 f"[white]{self.pkg.name}[/white]  "
                 f"[dim]{self.pkg.manager} {self.pkg.version}[/dim]",
                 id="modal-pkg",
             )
             yield Label("[dim]This action cannot be undone.[/dim]", id="modal-hint")
+            if self.dry_run_output:
+                with VerticalScroll(id="modal-output"):
+                    yield Static(self.dry_run_output)
             with Horizontal(id="modal-buttons"):
                 yield Button("Cancel", variant="default", id="btn-cancel")
                 yield Button("Delete", variant="error", id="btn-confirm")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(event.button.id == "btn-confirm")
+
+
+class ConfirmUpdateModal(ModalScreen[bool]):
+    DEFAULT_CSS = """
+    ConfirmUpdateModal { align: center middle; }
+    #modal-box {
+        width: 58; height: auto; max-height: 80%;
+        border: thick $primary; background: $surface; padding: 1 2;
+    }
+    #modal-title { text-align: center; color: $primary; text-style: bold; margin-bottom: 1; }
+    #modal-pkg   { text-align: center; margin-bottom: 1; }
+    #modal-output { background: $panel; padding: 1; margin-bottom: 1; height: auto; max-height: 10; }
+    #modal-buttons { layout: horizontal; align: center middle; height: 3; }
+    #modal-buttons Button { margin: 0 2; }
+    """
+
+    def __init__(self, pkg: Package, dry_run_output: str = "") -> None:
+        super().__init__()
+        self.pkg = pkg
+        self.dry_run_output = dry_run_output
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="modal-box"):
+            yield Label("Update Package (Preview)", id="modal-title")
+            yield Label(
+                f"[white]{self.pkg.name}[/white]  "
+                f"[dim]{self.pkg.manager} {self.pkg.version}[/dim]",
+                id="modal-pkg",
+            )
+            if self.dry_run_output:
+                with VerticalScroll(id="modal-output"):
+                    yield Static(self.dry_run_output)
+            with Horizontal(id="modal-buttons"):
+                yield Button("Cancel", variant="default", id="btn-cancel")
+                yield Button("Update", variant="primary", id="btn-confirm")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss(event.button.id == "btn-confirm")
@@ -711,12 +754,20 @@ class XYZApp(App):
             self.notify("No package selected.", severity="warning")
             return
         pkg = self._selected
-        self.notify(f"Updating [bold]{pkg.name}[/bold]…", title="Update")
-        success, output = await self._managers_registry.update(pkg)
-        if success:
-            self.notify(f"Successfully updated {pkg.name}\n[dim]{output}[/dim]", title="Update Success")
-        else:
-            self.notify(f"Failed to update {pkg.name}\n{output}", title="Update Error", severity="error")
+        
+        self.notify(f"Fetching update preview for [bold]{pkg.name}[/bold]…", title="Preview")
+        preview_success, preview_output = await self._managers_registry.update(pkg, dry_run=True)
+        if not preview_output:
+            preview_output = "Dry run preview unavailable or empty."
+
+        confirmed: bool = await self.push_screen_wait(ConfirmUpdateModal(pkg, preview_output))
+        if confirmed:
+            self.notify(f"Updating [bold]{pkg.name}[/bold]…", title="Update")
+            success, output = await self._managers_registry.update(pkg)
+            if success:
+                self.notify(f"Successfully updated {pkg.name}\n[dim]{output}[/dim]", title="Update Success")
+            else:
+                self.notify(f"Failed to update {pkg.name}\n{output}", title="Update Error", severity="error")
 
     @work
     async def action_delete_package(self) -> None:
@@ -724,7 +775,13 @@ class XYZApp(App):
             self.notify("No package selected.", severity="warning")
             return
         pkg = self._selected
-        confirmed: bool = await self.push_screen_wait(ConfirmDeleteModal(pkg))
+
+        self.notify(f"Fetching delete preview for [bold]{pkg.name}[/bold]…", title="Preview")
+        preview_success, preview_output = await self._managers_registry.delete(pkg, dry_run=True)
+        if not preview_output:
+            preview_output = "Dry run preview unavailable or empty."
+
+        confirmed: bool = await self.push_screen_wait(ConfirmDeleteModal(pkg, preview_output))
         if confirmed:
             self.notify(f"Deleting [bold]{pkg.name}[/bold]…", title="Delete", severity="warning")
             success, output = await self._managers_registry.delete(pkg)

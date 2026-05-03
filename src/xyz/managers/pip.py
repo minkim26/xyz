@@ -61,11 +61,16 @@ class PipManager(BaseManager):
             packages.append(Package(name=name, version=version, manager=self.name, install_date=install_date, source=source))
         return packages
 
-    async def update(self, name: str) -> tuple[bool, str]:
-        stdout, stderr, code = await run_command([self._cmd, "install", "--upgrade", name])
+    async def update(self, name: str, dry_run: bool = False) -> tuple[bool, str]:
+        cmd = [self._cmd, "install", "--upgrade", name]
+        if dry_run:
+            cmd.insert(2, "--dry-run")
+        stdout, stderr, code = await run_command(cmd)
         return code == 0, f"{stdout}\n{stderr}".strip()
 
-    async def delete(self, name: str) -> tuple[bool, str]:
+    async def delete(self, name: str, dry_run: bool = False) -> tuple[bool, str]:
+        if dry_run:
+            return True, f"Would uninstall {name} and its unneeded dependencies."
         stdout, stderr, code = await run_command([self._cmd, "uninstall", "-y", name])
         return code == 0, f"{stdout}\n{stderr}".strip()
 
