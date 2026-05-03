@@ -524,11 +524,7 @@ class XYZApp(App):
         self.query_one("#search-input", Input).focus()
 
     def action_blur_search(self) -> None:
-        inp = self.query_one("#search-input", Input)
-        if inp.value:
-            inp.value = ""
-        else:
-            self.query_one("#package-list", DataTable).focus()
+        self.query_one("#package-list", DataTable).focus()
 
     def action_ask_ai(self) -> None:
         if not self._selected:
