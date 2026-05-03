@@ -56,7 +56,8 @@ class DetailPane(Widget):
             f"{badge_str}"
         )
         self.query_one("#dp-meta", Static).update(
-            f"[dim]size[/dim]  {pkg.size}"
+            f"[dim]manager[/dim]  [{color}]{pkg.manager}[/{color}]  "
+            f"[dim]version[/dim]  {pkg.version}"
         )
         ai_block = (
             f"[bold cyan]● GEMINI[/bold cyan]\n\n{ai_text}"
@@ -232,7 +233,7 @@ class XYZApp(App):
 
     async def on_mount(self) -> None:
         table = self.query_one("#package-list", DataTable)
-        table.add_columns("PACKAGE  VERSION", "MANAGER", "SIZE", "STATUS")
+        table.add_columns("PACKAGE", "VERSION", "MANAGER", "STATUS")
         self.query_one(DetailPane).show_empty("Scanning package managers…")
         self.run_worker(self._load_packages())
 
@@ -284,11 +285,11 @@ class XYZApp(App):
                 pkg = item
                 color = _mgr_color(pkg.manager)
                 table.add_row(
-                    f"{pkg.name}[dim] {pkg.version}[/dim]",
+                    pkg.name,
+                    f"[dim]{pkg.version}[/dim]",
                     f"[{color}]{pkg.manager}[/{color}]",
-                    pkg.size,
                     _status_markup(pkg, self._dupe_names),
-                    key=pkg.name,
+                    key=f"{pkg.manager}:{pkg.name}",
                 )
 
         detail = self.query_one(DetailPane)
