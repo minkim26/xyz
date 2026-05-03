@@ -93,4 +93,55 @@ class PipManager(BaseManager):
         return requires, required_by
 
     async def check_orphans(self) -> builtins.list[Package]:
-        return []  # Stretch: Hours 16-20
+        leaves_out, _, leaves_rc = await run_command(
+            [self._cmd, "list", "--not-required", "--format=json"]
+        )
+        if leaves_rc != 0:
+            return []
+
+        try:
+            leaves = json.loads(leaves_out)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+        inspect_out, _, inspect_rc = await run_command([self._cmd, "inspect", "--local"])
+        if inspect_rc != 0:
+            return []
+
+        try:
+            inspect_data = json.loads(inspect_out)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+        not_requested: set[str] = set()
+        for pkg in inspect_data.get("installed", []):
+            if not isinstance(pkg, dict):
+                continue
+            metadata = pkg.get("metadata")
+            if not isinstance(metadata, dict):
+                continue
+            name = metadata.get("name")
+            if not name:
+                continue
+            requested = bool(pkg.get("requested", False))
+            if not requested:
+                not_requested.add(str(name).lower())
+
+        orphans: builtins.list[Package] = []
+        for leaf in leaves:
+            if not isinstance(leaf, dict):
+                continue
+            name = leaf.get("name")
+            version = leaf.get("version", "")
+            if not name:
+                continue
+            if str(name).lower() in not_requested:
+                orphans.append(
+                    Package(
+                        name=str(name),
+                        version=str(version),
+                        manager=self.name,
+                        is_orphan=True,
+                    )
+                )
+        return orphans

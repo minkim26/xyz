@@ -62,4 +62,34 @@ class NpmManager(BaseManager):
         return code == 0, f"{stdout}\n{stderr}".strip()
 
     async def check_orphans(self) -> builtins.list[Package]:
-        return []
+        stdout, _, returncode = await run_command(
+            ["npm", "ls", "-g", "--json", "--all"]
+        )
+        if returncode not in (0, 1):
+            return []
+
+        try:
+            raw = json.loads(stdout)
+        except json.JSONDecodeError:
+            return []
+
+        orphans: dict[str, str] = {}
+
+        def _walk(tree: object) -> None:
+            if not isinstance(tree, dict):
+                return
+            deps = tree.get("dependencies")
+            if not isinstance(deps, dict):
+                return
+            for pkg_name, info in deps.items():
+                if not isinstance(info, dict):
+                    continue
+                if bool(info.get("extraneous", False)):
+                    orphans[pkg_name] = str(info.get("version", ""))
+                _walk(info)
+
+        _walk(raw)
+        return [
+            Package(name=name, version=version, manager=self.name, is_orphan=True)
+            for name, version in sorted(orphans.items())
+        ]

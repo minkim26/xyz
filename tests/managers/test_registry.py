@@ -15,6 +15,7 @@ def _mock_manager(packages: list[Package] | Exception) -> BaseManager:
         m.list = AsyncMock(side_effect=packages)
     else:
         m.list = AsyncMock(return_value=packages)
+    m.check_orphans = AsyncMock(return_value=[])
     return m
 
 
@@ -80,3 +81,46 @@ async def test_registry_one_manager_fails_others_succeed():
     ])
     packages = await registry.scan_all()
     assert sorted(p.name for p in packages) == ["requests", "typescript"]
+
+
+async def test_registry_marks_orphan_packages_from_manager_signal():
+    pip_pkg = Package(name="urllib3", version="2.2.1", manager="pip")
+    npm_pkg = Package(name="eslint", version="8.57.0", manager="npm")
+
+    pip_manager = _mock_manager([pip_pkg])
+    pip_manager.name = "pip"
+    pip_manager.check_orphans = AsyncMock(
+        return_value=[Package(name="urllib3", version="2.2.1", manager="pip", is_orphan=True)]
+    )
+
+    npm_manager = _mock_manager([npm_pkg])
+    npm_manager.name = "npm"
+    npm_manager.check_orphans = AsyncMock(return_value=[])
+
+    registry = ManagerRegistry(managers=[pip_manager, npm_manager])
+    packages = await registry.scan_all()
+    by_key = {(p.manager, p.name): p for p in packages}
+
+    assert by_key[("pip", "urllib3")].is_orphan is True
+    assert by_key[("npm", "eslint")].is_orphan is False
+
+
+async def test_registry_keeps_list_when_orphan_check_times_out():
+    pkg = Package(name="colima", version="0.7.4", manager="brew")
+
+    async def fast_list() -> list[Package]:
+        return [pkg]
+
+    async def slow_orphans() -> list[Package]:
+        await asyncio.sleep(100)
+        return []
+
+    manager = MagicMock(spec=BaseManager)
+    manager.name = "brew"
+    manager.list = fast_list
+    manager.check_orphans = slow_orphans
+
+    registry = ManagerRegistry(managers=[manager], timeout=0.01)
+    packages = await registry.scan_all()
+
+    assert packages == [pkg]
