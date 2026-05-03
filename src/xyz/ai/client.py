@@ -13,7 +13,7 @@ from typing import Optional
 
 from google import genai
 from google.genai import types
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-MODEL = "gemini-2.0-flash"
+MODEL = "gemini-2.5-flash-lite"
 DEFAULT_TEMPERATURE = 0.3
 DEFAULT_MAX_TOKENS = 8192
 
@@ -54,6 +54,26 @@ class GeminiClient:
                 "No GEMINI_API_KEY found -- AI features disabled. "
                 "Set the GEMINI_API_KEY environment variable to enable."
             )
+
+        # Track timestamps of requests for local rate limiting
+        self._request_timestamps: list[float] = []
+
+    def _check_rate_limit(self) -> bool:
+        """Enforce a strict 14 requests per minute limit locally.
+        
+        This prevents burning quota on failed API calls when we know 
+        we'll get a 429 anyway.
+        """
+        now = time.time()
+        # Keep only timestamps from the last 60 seconds
+        self._request_timestamps = [t for t in self._request_timestamps if now - t < 60.0]
+        
+        # Limit to 14 requests per rolling 60s window
+        if len(self._request_timestamps) >= 14:
+            return False
+            
+        self._request_timestamps.append(now)
+        return True
 
     # -- Singleton accessor --------------------------------------------------
 
@@ -95,17 +115,11 @@ class GeminiClient:
                 "package explanations."
             )
 
-        def _is_rate_limit(exc: BaseException) -> bool:
-            s = str(exc).lower()
-            return "rate limit" in s or "quota exceeded" in s or "429" in s
+        if not self._check_rate_limit():
+            logger.warning("Local rate limit hit (preventing API call)")
+            return "Rate limit reached — please wait a moment before asking AI."
 
-        @retry(
-            retry=retry_if_exception(_is_rate_limit),
-            wait=wait_exponential(multiplier=1, min=2, max=10),
-            stop=stop_after_attempt(3),
-            reraise=True,
-        )
-        async def _call() -> str:
+        try:
             response = await self._client.aio.models.generate_content(
                 model=MODEL,
                 contents=prompt,
@@ -118,13 +132,10 @@ class GeminiClient:
             if not text:
                 return "Gemini returned an empty response. Try again."
             return text.strip()
-
-        try:
-            return await _call()
         except Exception as exc:
             error_str = str(exc).lower()
             if "rate limit" in error_str or "quota exceeded" in error_str or "429" in error_str:
-                logger.warning("Gemini rate limit hit after retries: %s", exc)
+                logger.warning("Gemini rate limit hit: %s", exc)
                 return "Rate limit reached — please wait a moment and try again."
             if "api key" in error_str or "401" in error_str or "403" in error_str:
                 logger.error("Gemini auth error: %s", exc)
