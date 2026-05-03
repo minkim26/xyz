@@ -13,6 +13,7 @@ from typing import Optional
 
 from google import genai
 from google.genai import types
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-MODEL = "gemini-2.5-flash-lite"
+MODEL = "gemini-2.0-flash"
 DEFAULT_TEMPERATURE = 0.3
 DEFAULT_MAX_TOKENS = 8192
 
@@ -94,7 +95,17 @@ class GeminiClient:
                 "package explanations."
             )
 
-        try:
+        def _is_rate_limit(exc: BaseException) -> bool:
+            s = str(exc).lower()
+            return "rate limit" in s or "quota exceeded" in s or "429" in s
+
+        @retry(
+            retry=retry_if_exception(_is_rate_limit),
+            wait=wait_exponential(multiplier=1, min=2, max=10),
+            stop=stop_after_attempt(3),
+            reraise=True,
+        )
+        async def _call() -> str:
             response = await self._client.aio.models.generate_content(
                 model=MODEL,
                 contents=prompt,
@@ -108,18 +119,15 @@ class GeminiClient:
                 return "Gemini returned an empty response. Try again."
             return text.strip()
 
+        try:
+            return await _call()
         except Exception as exc:
             error_str = str(exc).lower()
             if "rate limit" in error_str or "quota exceeded" in error_str or "429" in error_str:
-                logger.warning("Gemini rate limit hit: %s", exc)
-                return (
-                    "Rate limit reached -- please wait a moment and try again."
-                )
+                logger.warning("Gemini rate limit hit after retries: %s", exc)
+                return "Rate limit reached — please wait a moment and try again."
             if "api key" in error_str or "401" in error_str or "403" in error_str:
                 logger.error("Gemini auth error: %s", exc)
-                return (
-                    "Invalid API key. Check your GEMINI_API_KEY "
-                    "environment variable."
-                )
+                return "Invalid API key. Check your GEMINI_API_KEY environment variable."
             logger.exception("Gemini API error")
             return f"AI request failed: {exc}"

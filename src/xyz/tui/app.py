@@ -6,7 +6,7 @@ from typing import Optional
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import Button, DataTable, Input, Label, Static
@@ -74,8 +74,12 @@ class DetailPane(Widget):
         margin-right: 1;
         min-width: 14;
     }
+    #dp-ai-scroll {
+        height: 1fr;
+    }
     #dp-ai {
         padding: 1 2;
+        height: auto;
     }
     """
 
@@ -85,7 +89,8 @@ class DetailPane(Widget):
         with Horizontal(id="dp-actions"):
             yield Button("↑  update", id="btn-detail-update", variant="primary")
             yield Button("✕  remove", id="btn-detail-remove", variant="error")
-        yield Static("", id="dp-ai")
+        with VerticalScroll(id="dp-ai-scroll"):
+            yield Static("", id="dp-ai")
 
     def on_mount(self) -> None:
         self.show_empty()
