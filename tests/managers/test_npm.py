@@ -81,25 +81,25 @@ async def test_list_package_size_is_none(manager, fake_subprocess):
 async def test_update_returns_true_on_success(manager, fake_subprocess):
     with fake_subprocess("xyz.managers.npm", returncode=0):
         result = await manager.update("typescript")
-    assert result is True
+    assert result == (True, "")
 
 
 async def test_update_returns_false_on_failure(manager, fake_subprocess):
     with fake_subprocess("xyz.managers.npm", returncode=1):
         result = await manager.update("typescript")
-    assert result is False
+    assert result == (False, "")
 
 
 async def test_delete_returns_true_on_success(manager, fake_subprocess):
     with fake_subprocess("xyz.managers.npm", returncode=0):
         result = await manager.delete("typescript")
-    assert result is True
+    assert result == (True, "")
 
 
 async def test_delete_returns_false_on_failure(manager, fake_subprocess):
     with fake_subprocess("xyz.managers.npm", returncode=1):
         result = await manager.delete("typescript")
-    assert result is False
+    assert result == (False, "")
 
 
 async def test_check_orphans_stub_returns_empty(manager):

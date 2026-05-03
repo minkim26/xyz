@@ -22,6 +22,9 @@ class ManagerRegistry:
         self._managers = managers if managers is not None else _detect_managers()
         self._timeout = timeout
 
+    def get_manager(self, name: str) -> BaseManager | None:
+        return next((m for m in self._managers if m.name == name), None)
+
     async def scan_all(self) -> list[Package]:
         tasks = [
             asyncio.wait_for(m.list(), timeout=self._timeout)
@@ -38,6 +41,18 @@ class ManagerRegistry:
                     raise result
                 logger.warning("Manager %s scan failed: %s", manager.name, result)
         return packages
+
+    async def update(self, pkg: Package) -> tuple[bool, str]:
+        for manager in self._managers:
+            if manager.name == pkg.manager:
+                return await manager.update(pkg.name)
+        return False, f"Manager {pkg.manager} not found."
+
+    async def delete(self, pkg: Package) -> tuple[bool, str]:
+        for manager in self._managers:
+            if manager.name == pkg.manager:
+                return await manager.delete(pkg.name)
+        return False, f"Manager {pkg.manager} not found."
 
 
 def _detect_managers() -> list[BaseManager]:

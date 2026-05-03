@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 import glob
 import json
 import os
@@ -22,7 +23,7 @@ class PipManager(BaseManager):
     def is_available(self) -> bool:
         return shutil.which("pip3") is not None or shutil.which("pip") is not None
 
-    async def list(self) -> list[Package]:
+    async def list(self) -> builtins.list[Package]:
         (list_out, _, rc), (show_out, _, _) = await asyncio.gather(
             run_command([self._cmd, "list", "--format=json"]),
             run_command([self._cmd, "show", "pip"]),
@@ -60,13 +61,28 @@ class PipManager(BaseManager):
             packages.append(Package(name=name, version=version, manager=self.name, install_date=install_date, source=source))
         return packages
 
-    async def update(self, name: str) -> bool:
-        _, _, code = await run_command([self._cmd, "install", "--upgrade", name])
-        return code == 0
+    async def update(self, name: str) -> tuple[bool, str]:
+        stdout, stderr, code = await run_command([self._cmd, "install", "--upgrade", name])
+        return code == 0, f"{stdout}\n{stderr}".strip()
 
-    async def delete(self, name: str) -> bool:
-        _, _, code = await run_command([self._cmd, "uninstall", "-y", name])
-        return code == 0
+    async def delete(self, name: str) -> tuple[bool, str]:
+        stdout, stderr, code = await run_command([self._cmd, "uninstall", "-y", name])
+        return code == 0, f"{stdout}\n{stderr}".strip()
 
-    async def check_orphans(self) -> list[Package]:
+    async def get_deps(self, name: str) -> tuple[list[str], list[str]]:
+        stdout, _, rc = await run_command([self._cmd, "show", name])
+        if rc != 0:
+            return [], []
+        requires: list[str] = []
+        required_by: list[str] = []
+        for line in stdout.splitlines():
+            if line.startswith("Requires:"):
+                val = line.split(":", 1)[1].strip()
+                requires = [x.strip() for x in val.split(",") if x.strip()]
+            elif line.startswith("Required-by:"):
+                val = line.split(":", 1)[1].strip()
+                required_by = [x.strip() for x in val.split(",") if x.strip()]
+        return requires, required_by
+
+    async def check_orphans(self) -> builtins.list[Package]:
         return []  # Stretch: Hours 16-20
