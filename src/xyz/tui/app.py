@@ -32,11 +32,12 @@ async def _render_graph(mermaid_str: str) -> str:
     result = await asyncio.to_thread(
         subprocess.run,
         [_MERMAID_BIN],
-        input=mermaid_str,
-        text=True,
+        input=mermaid_str.encode("utf-8"),
         capture_output=True,
     )
-    return result.stdout.strip() if result.returncode == 0 else ""
+    if result.returncode != 0:
+        return f"[red]Mermaid Error:[/red]\n{result.stderr.decode('utf-8', errors='replace').strip()}"
+    return result.stdout.decode("utf-8", errors="replace").strip()
 
 from textual import work
 from textual.app import App, ComposeResult
