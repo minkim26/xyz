@@ -466,7 +466,7 @@ class XYZApp(App):
     def compose(self) -> ComposeResult:
         with Horizontal(id="search-row"):
             yield Label("search", id="search-label")
-            yield Input(placeholder="", id="search-input")
+            yield Input(placeholder="Try using '?AI' to search for all AI related packages", id="search-input")
             yield Label("", id="result-count")
             yield Horizontal(id="manager-pills")
         with Horizontal(id="main-row"):
@@ -474,7 +474,7 @@ class XYZApp(App):
             yield DetailPane(id="detail-pane")
         yield Static("", id="stats-bar")
         yield Static(
-            "↑↓ navigate   u update   d delete   a AI   g graph   o orphans   m manager   / search   ctrl+q quit",
+            "↑↓ navigate   u update   d delete   a AI   g graph   o orphans   m manager   / search   ? AI search   ctrl+q quit",
             id="key-bar",
         )
 
