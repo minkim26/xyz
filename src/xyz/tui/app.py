@@ -9,16 +9,39 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Static
+from textual.widgets import Button, DataTable, Input, Label, Static
 
 from xyz.managers import Package, ManagerRegistry
 
 try:
-    from xyz.managers import Package, ManagerRegistry
     from xyz.ai import explain_package, assess_orphan_risk, natural_language_search
 except ImportError:
-    from managers import Package, ManagerRegistry  # type: ignore[no-redef]
-    from ai import explain_package, assess_orphan_risk, natural_language_search  # type: ignore[no-redef]
+    async def explain_package(_name: str, _manager: str, _version: str) -> str:  # type: ignore[misc]
+        return "AI unavailable — check GEMINI_API_KEY and dependencies."
+    async def assess_orphan_risk(_name: str, _manager: str) -> str:  # type: ignore[misc]
+        return "AI unavailable — check GEMINI_API_KEY and dependencies."
+    async def natural_language_search(_query: str, _package_names: list[str]) -> list[str]:  # type: ignore[misc]
+        return []
+
+
+MANAGER_COLORS: dict[str, str] = {
+    "pip":    "#3B82F6",
+    "npm":    "#22C55E",
+    "brew":   "#EF4444",
+    "apt":    "#EAB308",
+    "bun":    "#F97316",
+    "pacman": "#A855F7",
+}
+
+def _mgr_color(manager: str) -> str:
+    return MANAGER_COLORS.get(manager.lower(), "#9CA3AF")
+
+def _status_markup(pkg: Package, dupe_names: set[str]) -> str:
+    if pkg.is_orphan:
+        return "[bold red]orphan[/bold red]"
+    if pkg.name in dupe_names:
+        return "[yellow]⚠ dupe[/yellow]"
+    return "[dim green]✓ ok[/dim green]"
 
 
 # ---------------------------------------------------------------------------
@@ -30,24 +53,63 @@ class DetailPane(Widget):
     DetailPane {
         height: 100%;
         background: $panel;
-        overflow-y: auto;
+    }
+    #dp-header {
+        padding: 1 2 0 2;
+        height: auto;
+        border-bottom: solid $surface;
+    }
+    #dp-meta {
+        padding: 1 2;
+        height: auto;
+        border-bottom: solid $surface;
+    }
+    #dp-actions {
+        padding: 1 2;
+        height: 5;
+        border-bottom: solid $surface;
+        align: left middle;
+    }
+    #dp-actions Button {
+        margin-right: 1;
+        min-width: 14;
+    }
+    #dp-ai {
+        padding: 1 2;
     }
     """
 
-    def show_loading(self) -> None:
-        self.update("[dim]Scanning package managers…[/dim]")
+    def compose(self) -> ComposeResult:
+        yield Static("", id="dp-header")
+        yield Static("", id="dp-meta")
+        with Horizontal(id="dp-actions"):
+            yield Button("↑  update", id="btn-detail-update", variant="primary")
+            yield Button("✕  remove", id="btn-detail-remove", variant="error")
+        yield Static("", id="dp-ai")
 
-    def show_empty(self) -> None:
-        self.update("[dim]Select a package to see details.[/dim]")
+    def on_mount(self) -> None:
+        self.show_empty()
 
-    def show_package(self, pkg: Package, ai_text: str = "", ai_loading: bool = False) -> None:
-        orphan_badge = "\n[yellow bold]⚠  Orphaned[/yellow bold]" if pkg.is_orphan else ""
-        if ai_text:
-            ai_block = f"\n\n[bold cyan]AI Explanation[/bold cyan]\n{ai_text}"
-        elif ai_loading:
-            ai_block = "\n\n[bold cyan]AI Explanation[/bold cyan]\n[dim]Loading…[/dim]"
-        else:
-            ai_block = "\n\n[bold cyan]AI Explanation[/bold cyan]\n[dim]Press 'a' to generate insights[/dim]"
+    def show_empty(self, msg: str = "Select a package to see details.") -> None:
+        self.query_one("#dp-header", Static).update(f"[dim]{msg}[/dim]")
+        self.query_one("#dp-meta", Static).update("")
+        self.query_one("#dp-ai", Static).update("")
+        self.query_one("#dp-actions").display = False
+
+    def show_package(
+        self,
+        pkg: Package,
+        dupe_names: set[str],
+        ai_text: str = "",
+        ai_loading: bool = False,
+    ) -> None:
+        color = _mgr_color(pkg.manager)
+        badges: list[str] = []
+        if pkg.is_orphan:
+            badges.append("[bold red]orphan[/bold red]")
+        if pkg.name in dupe_names:
+            badges.append("[yellow]⚠ dupe[/yellow]")
+        badge_str = "  " + "  ".join(badges) if badges else ""
 
         self.query_one("#dp-header", Static).update(
             f"[bold white]{pkg.name}[/bold white]  "
@@ -59,11 +121,14 @@ class DetailPane(Widget):
             f"[dim]manager[/dim]  [{color}]{pkg.manager}[/{color}]  "
             f"[dim]version[/dim]  {pkg.version}"
         )
-        ai_block = (
-            f"[bold cyan]● GEMINI[/bold cyan]\n\n{ai_text}"
-            if ai_text
-            else "[bold cyan]● GEMINI[/bold cyan]\n\n[dim]Loading…[/dim]"
-        )
+
+        if ai_text:
+            ai_block = f"[bold cyan]● GEMINI[/bold cyan]\n\n{ai_text}"
+        elif ai_loading:
+            ai_block = "[bold cyan]● GEMINI[/bold cyan]\n\n[dim]Loading…[/dim]"
+        else:
+            ai_block = "[bold cyan]● GEMINI[/bold cyan]\n\n[dim]Press 'a' for AI insights[/dim]"
+
         self.query_one("#dp-ai", Static).update(ai_block)
         self.query_one("#dp-actions").display = True
 
@@ -115,15 +180,15 @@ class XYZApp(App):
     TITLE = "xyz — dependency manager"
 
     BINDINGS = [
-        Binding("u",      "update_package", "Update",      show=True),
-        Binding("d",      "delete_package", "Delete",      show=True),
-        Binding("U",      "upgrade_all",    "Upgrade All", show=True),
-        Binding("o",      "toggle_orphans", "Orphans",     show=True),
-        Binding("m",      "cycle_manager",  "Manager",     show=True),
-        Binding("a",      "ask_ai",         "Ask AI",      show=True),
-        Binding("/",      "focus_search",   "Search",      show=True),
-        Binding("escape", "blur_search",    "Back",        show=False),
-        Binding("q",      "quit",           "Quit",        show=True),
+        Binding("u",      "update_package", "u update",      show=False),
+        Binding("d",      "delete_package", "d delete",      show=False),
+        Binding("U",      "upgrade_all",    "U upgrade all", show=False),
+        Binding("o",      "toggle_orphans", "o orphans",     show=False),
+        Binding("m",      "cycle_manager",  "m manager",     show=False),
+        Binding("a",      "ask_ai",         "a AI",          show=False),
+        Binding("/",      "focus_search",   "/ search",      show=False),
+        Binding("escape", "blur_search",    "esc back",      show=False),
+        Binding("q",      "quit",           "q quit",        show=False),
     ]
 
     DEFAULT_CSS = """
@@ -207,7 +272,6 @@ class XYZApp(App):
         super().__init__()
         self._managers_registry = ManagerRegistry()
         self._all_packages: list[Package] = []
-        # Package | None where None = separator row
         self._display_rows: list[Package | None] = []
         self._dupe_names: set[str] = set()
         self._selected: Optional[Package] = None
@@ -227,7 +291,7 @@ class XYZApp(App):
             yield DetailPane(id="detail-pane")
         yield Static("", id="stats-bar")
         yield Static(
-            "↑↓ navigate   u update   d delete   o orphans   tab filter   / search   q quit",
+            "↑↓ navigate   u update   d delete   a AI   o orphans   m manager   / search   q quit",
             id="key-bar",
         )
 
@@ -317,15 +381,11 @@ class XYZApp(App):
             return
         pkg = self._display_rows[row]
         if pkg is None:
-            return  # separator — ignore
+            return
         self._selected = pkg
-        
-        # Cancel any previous AI task that might still be running
         if self._ai_task and not self._ai_task.done():
             self._ai_task.cancel()
-            
-        # Just show the basic package details (wait for manual AI trigger)
-        self.query_one(DetailPane).show_package(pkg)
+        self.query_one(DetailPane).show_package(pkg, self._dupe_names)
 
     def _kick_ai(self, pkg: Package) -> None:
         if self._ai_task and not self._ai_task.done():
@@ -357,37 +417,40 @@ class XYZApp(App):
         self._apply_filters()
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.input.id == "search-input":
-            query = event.value.strip()
-            if query.startswith("?"):
-                self.query_one(DetailPane).update("[dim]Asking Gemini to find packages...[/dim]")
-                package_names = [p.name for p in self._all_packages]
-                
-                try:
-                    matches = await natural_language_search(query[1:].strip(), package_names)
-                    self._filtered = [p for p in self._all_packages if p.name in matches]
-                    self._rebuild_table()
-                    
-                    if matches:
-                        self.query_one(DetailPane).update(f"[bold cyan]AI Search Found {len(matches)} matches![/bold cyan]\nSelect one to view details.")
-                    else:
-                        self.query_one(DetailPane).update("[yellow]AI could not find any relevant packages.[/yellow]")
-                except Exception as e:
-                    self.query_one(DetailPane).update(f"[red]AI Search Error: {e}[/red]")
+        if event.input.id != "search-input":
+            return
+        query = event.value.strip()
+        if not query.startswith("?"):
+            return
+        self.query_one(DetailPane).show_empty("Asking Gemini…")
+        try:
+            package_names = [p.name for p in self._all_packages]
+            matches = await natural_language_search(query[1:].strip(), package_names)
+            matched_pkgs = [p for p in self._all_packages if p.name in matches]
+            self._display_rows = matched_pkgs
+            self._rebuild_table()
+            self.query_one("#result-count", Label).update(f"{len(matched_pkgs)} results")
+            if not matched_pkgs:
+                self.query_one(DetailPane).show_empty("No AI matches found.")
+        except Exception as exc:
+            self.query_one(DetailPane).show_empty(f"AI search error: {exc}")
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        btn_id = event.button.id or ""
+        if btn_id.startswith("pill-"):
+            self._toggle_pill(btn_id[5:])
+            event.stop()
+        elif btn_id == "btn-detail-update":
+            self.action_update_package()
+            event.stop()
+        elif btn_id == "btn-detail-remove":
+            await self.action_delete_package()
+            event.stop()
 
     # ── actions ──────────────────────────────────────────────────────────────
 
     def action_focus_search(self) -> None:
         self.query_one("#search-input", Input).focus()
-
-    def action_ask_ai(self) -> None:
-        if not self._selected:
-            self.notify("No package selected.", severity="warning")
-            return
-            
-        # Update UI to show loading state
-        self.query_one(DetailPane).show_package(self._selected, ai_loading=True)
-        self._kick_ai(self._selected)
 
     def action_blur_search(self) -> None:
         inp = self.query_one("#search-input", Input)
@@ -395,6 +458,15 @@ class XYZApp(App):
             inp.value = ""
         else:
             self.query_one("#package-list", DataTable).focus()
+
+    def action_ask_ai(self) -> None:
+        if not self._selected:
+            self.notify("No package selected.", severity="warning")
+            return
+        self.query_one(DetailPane).show_package(
+            self._selected, self._dupe_names, ai_loading=True
+        )
+        self._kick_ai(self._selected)
 
     def action_toggle_orphans(self) -> None:
         self._orphan_only = not self._orphan_only
