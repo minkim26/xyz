@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from xyz.ai.client import GeminiClient
 from xyz.ai.cleanup import smart_cleanup as _cleanup
+from xyz.ai.cve import check_package_cves as _check_cves
 from xyz.ai.explainer import explain_package as _explain, stream_explain_package as _stream_explain
 from xyz.ai.orphan import assess_orphan_risk as _assess, stream_assess_orphan_risk as _stream_assess
 from xyz.ai.search import natural_language_search as _nl_search
@@ -71,6 +72,18 @@ async def smart_cleanup(packages: list[dict], dupe_names: set[str] | None = None
     return await _cleanup(client, packages, dupe_names=dupe_names)
 
 
+async def check_package_cves(name: str, manager: str, version: str) -> dict:
+    """Check a package for known CVEs using Gemini with Google Search grounding.
+
+    Returns a dict with keys:
+        severity  -- "none" | "low" | "medium" | "high" | "critical" | "unknown"
+        cve_ids   -- list of CVE ID strings (may be empty)
+        summary   -- human-readable sentence about findings
+    """
+    client = GeminiClient.get_instance()
+    return await _check_cves(client, name, manager, version)
+
+
 __all__ = [
     "GeminiClient",
     "explain_package",
@@ -79,4 +92,5 @@ __all__ = [
     "stream_assess_orphan_risk",
     "natural_language_search",
     "smart_cleanup",
+    "check_package_cves",
 ]
