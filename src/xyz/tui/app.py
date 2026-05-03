@@ -38,6 +38,7 @@ async def _render_graph(mermaid_str: str) -> str:
     )
     return result.stdout.strip() if result.returncode == 0 else ""
 
+from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -647,7 +648,7 @@ class XYZApp(App):
             self.action_update_package()
             event.stop()
         elif btn_id == "btn-detail-remove":
-            await self.action_delete_package()
+            self.action_delete_package()
             event.stop()
 
     # ── actions ──────────────────────────────────────────────────────────────
@@ -703,24 +704,35 @@ class XYZApp(App):
         self._update_pill_styles()
         self._apply_filters()
 
-    def action_update_package(self) -> None:
+    @work
+    async def action_update_package(self) -> None:
         if not self._selected:
             self.notify("No package selected.", severity="warning")
             return
-        self.notify(f"Updating [bold]{self._selected.name}[/bold]…", title="Update")
-        # TODO: await self._managers_registry.update(self._selected)
+        pkg = self._selected
+        self.notify(f"Updating [bold]{pkg.name}[/bold]…", title="Update")
+        success, output = await self._managers_registry.update(pkg)
+        if success:
+            self.notify(f"Successfully updated {pkg.name}\n[dim]{output}[/dim]", title="Update Success")
+        else:
+            self.notify(f"Failed to update {pkg.name}\n{output}", title="Update Error", severity="error")
 
+    @work
     async def action_delete_package(self) -> None:
         if not self._selected:
             self.notify("No package selected.", severity="warning")
             return
-        confirmed: bool = await self.push_screen_wait(ConfirmDeleteModal(self._selected))
+        pkg = self._selected
+        confirmed: bool = await self.push_screen_wait(ConfirmDeleteModal(pkg))
         if confirmed:
-            pkg = self._selected
             self.notify(f"Deleting [bold]{pkg.name}[/bold]…", title="Delete", severity="warning")
-            # TODO: await self._managers_registry.delete(pkg)
-            self._all_packages = [p for p in self._all_packages if p.name != pkg.name]
-            self._apply_filters()
+            success, output = await self._managers_registry.delete(pkg)
+            if success:
+                self.notify(f"Successfully deleted {pkg.name}\n[dim]{output}[/dim]", title="Delete Success")
+                self._all_packages = [p for p in self._all_packages if not (p.name == pkg.name and p.manager == pkg.manager)]
+                self._apply_filters()
+            else:
+                self.notify(f"Failed to delete {pkg.name}\n{output}", title="Delete Error", severity="error")
 
     def action_upgrade_all(self) -> None:
         self.notify(

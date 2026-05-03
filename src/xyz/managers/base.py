@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -37,16 +38,17 @@ class BaseManager(ABC):
         return shutil.which(self.name) is not None
 
     @abstractmethod
-    async def list(self) -> list[Package]: ...
+    async def list(self) -> builtins.list[Package]: ...
 
     @abstractmethod
-    async def update(self, name: str) -> bool: ...
+    async def update(self, name: str) -> tuple[bool, str]: ...
 
     @abstractmethod
-    async def delete(self, name: str) -> bool: ...
+    async def delete(self, name: str) -> tuple[bool, str]: ...
 
     @abstractmethod
-    async def check_orphans(self) -> list[Package]: ...
+    @abstractmethod
+    async def check_orphans(self) -> builtins.list[Package]: ...
 
     async def get_deps(self, name: str) -> tuple[list[str], list[str]]:
         """Return (requires, required_by). Override in managers that support it."""

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import json
 import os
 from datetime import datetime
@@ -14,7 +15,7 @@ class NpmManager(BaseManager):
     def name(self) -> str:
         return "npm"
 
-    async def list(self) -> list[Package]:
+    async def list(self) -> builtins.list[Package]:
         stdout, _, returncode = await run_command(
             ["npm", "list", "-g", "--json", "--depth=0"]
         )
@@ -46,13 +47,13 @@ class NpmManager(BaseManager):
             packages.append(Package(name=pkg_name, version=version, manager=self.name, install_date=install_date, source=source))
         return packages
 
-    async def update(self, name: str) -> bool:
-        _, _, code = await run_command(["npm", "update", "-g", name])
-        return code == 0
+    async def update(self, name: str) -> tuple[bool, str]:
+        stdout, stderr, code = await run_command(["npm", "update", "-g", name])
+        return code == 0, f"{stdout}\n{stderr}".strip()
 
-    async def delete(self, name: str) -> bool:
-        _, _, code = await run_command(["npm", "uninstall", "-g", name])
-        return code == 0
+    async def delete(self, name: str) -> tuple[bool, str]:
+        stdout, stderr, code = await run_command(["npm", "uninstall", "-g", name])
+        return code == 0, f"{stdout}\n{stderr}".strip()
 
-    async def check_orphans(self) -> list[Package]:
+    async def check_orphans(self) -> builtins.list[Package]:
         return []
