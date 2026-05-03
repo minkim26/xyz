@@ -1,5 +1,8 @@
+from .tui.app import main as tui_main
+
+
 def main() -> None:
-    raise NotImplementedError("TUI not yet implemented")
+    tui_main()
 
 
 if __name__ == "__main__":

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import asyncio
-import shutil
+import logging
 
 from .base import BaseManager, Package
 from .npm import NpmManager
 from .pip import PipManager
 
-_DEFAULT_TIMEOUT = 10.0
+_DEFAULT_TIMEOUT = 3.0
+
+logger = logging.getLogger(__name__)
 
 
 class ManagerRegistry:
@@ -26,10 +28,14 @@ class ManagerRegistry:
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         packages: list[Package] = []
-        for result in results:
+        for manager, result in zip(self._managers, results):
             if isinstance(result, list):
                 packages.extend(result)
-            # TimeoutError, subprocess errors, etc. are swallowed per-manager
+                continue
+            if isinstance(result, BaseException):
+                if not isinstance(result, Exception):
+                    raise result
+                logger.warning("Manager %s scan failed: %s", manager.name, result)
         return packages
 
 

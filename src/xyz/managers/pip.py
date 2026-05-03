@@ -22,10 +22,14 @@ class PipManager(BaseManager):
         stdout, _, returncode = await run_command([self._cmd, "list", "--format=json"])
         if returncode != 0:
             return []
-        return [
-            Package(name=p["name"], version=p["version"], manager=self.name)
-            for p in json.loads(stdout)
-        ]
+        try:
+            data = json.loads(stdout)
+            return [
+                Package(name=p["name"], version=p["version"], manager=self.name)
+                for p in data
+            ]
+        except (json.JSONDecodeError, KeyError, TypeError):
+            return []
 
     async def update(self, name: str) -> bool:
         _, _, code = await run_command([self._cmd, "install", "--upgrade", name])

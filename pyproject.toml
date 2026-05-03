@@ -28,3 +28,6 @@ include = ["xyz*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[project.optional-dependencies]
+test = ["pytest-asyncio"]

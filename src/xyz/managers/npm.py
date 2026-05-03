@@ -22,9 +22,14 @@ class NpmManager(BaseManager):
             raw = json.loads(stdout)
         except json.JSONDecodeError:
             return []
+        deps = raw.get("dependencies") or {}
         return [
-            Package(name=pkg_name, version=info.get("version", ""), manager=self.name)
-            for pkg_name, info in raw.get("dependencies", {}).items()
+            Package(
+                name=pkg_name,
+                version=info.get("version", "") if isinstance(info, dict) else "",
+                manager=self.name,
+            )
+            for pkg_name, info in deps.items()
         ]
 
     async def update(self, name: str) -> bool:

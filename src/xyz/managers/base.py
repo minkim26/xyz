@@ -3,7 +3,6 @@ from __future__ import annotations
 import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -11,8 +10,20 @@ class Package:
     name: str
     version: str
     manager: str
-    size: Optional[int] = None  # bytes; None when the CLI does not provide it
+    size: int | None = None  # bytes; None when the CLI does not provide it
     is_orphan: bool = False
+
+    def formatted_size(self) -> str:
+        if self.size is None:
+            return "—"
+        size = float(self.size)
+        for unit in ("B", "KB", "MB", "GB", "TB"):
+            if size < 1024 or unit == "TB":
+                if unit == "B":
+                    return f"{int(size)} {unit}"
+                return f"{size:.1f} {unit}"
+            size /= 1024
+        return f"{size:.1f} TB"
 
 
 class BaseManager(ABC):
