@@ -56,17 +56,21 @@ def _parse_package_list(response: str, valid_names: list[str]) -> list[str]:
     Performs validation to ensure only names that actually exist in the
     installed package list are returned.
     """
-    # Strip markdown code fences if Gemini wraps the response
+    import re
     text = response.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = [line for line in lines if not line.strip().startswith("```")]
-        text = "\n".join(lines).strip()
+    
+    # Try to find a JSON array within the response using regex
+    match = re.search(r'\[.*\]', text, re.DOTALL)
+    if not match:
+        logger.warning("No JSON array found in NL search response: %s", text)
+        return []
+        
+    array_text = match.group(0)
 
     try:
-        parsed = json.loads(text)
+        parsed = json.loads(array_text)
     except json.JSONDecodeError:
-        logger.warning("Failed to parse NL search response as JSON: %s", text)
+        logger.warning("Failed to parse extracted JSON array: %s", array_text)
         return []
 
     if not isinstance(parsed, list):
