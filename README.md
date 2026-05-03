@@ -1,5 +1,9 @@
 # XYZ — Universal Dependency Manager
 
+<img src="assets/xyz-logo-dark.svg" width="320" alt="XYZ logo">
+
+
+
 > One terminal. Every package manager. No more context switching.
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)

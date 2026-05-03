@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 200" role="img" aria-label="XYZ logo">
+  <title>XYZ</title>
+  <g stroke="#FFFFFF" stroke-width="1" stroke-linejoin="round" stroke-linecap="round">
+    <polygon points="264,56 302,78 264,100 226,78" fill="#F97316"/>
+    <polygon points="226,78 264,100 264,144 226,122" fill="none"/>
+    <polygon points="264,100 302,78 302,122 264,144" fill="none"/>
+  </g>
+  <text x="264" y="84" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" font-weight="500" fill="#1C1917">X</text>
+  <text x="245" y="117" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" font-weight="500" fill="#FFFFFF">Y</text>
+  <text x="283" y="117" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" font-weight="500" fill="#FFFFFF">Z</text>
+  <text x="324" y="128" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Helvetica, Arial, sans-serif" font-size="80" font-weight="500" fill="#FFFFFF" letter-spacing="-0.05em">xyz</text>
+</svg>
