@@ -83,9 +83,19 @@ async def test_delete_propagates_output(manager, fake_subprocess):
     assert result == (False, "error removing")
 
 
-async def test_check_orphans_stub_returns_empty(manager):
-    result = await manager.check_orphans()
-    assert result == []
+async def test_check_orphans_stub_returns_empty(manager, fake_subprocess):
+    leaves = '[{"name":"urllib3","version":"2.2.1"},{"name":"pip","version":"24.0"}]'
+    inspect = '{"installed":[{"metadata":{"name":"urllib3"},"requested":false},{"metadata":{"name":"pip"},"requested":true}]}'
+    with fake_subprocess("xyz.managers.pip") as mocked:
+        mocked.side_effect = [
+            (leaves, "", 0),
+            (inspect, "", 0),
+        ]
+        result = await manager.check_orphans()
+
+    assert result == [
+        Package(name="urllib3", version="2.2.1", manager="pip", is_orphan=True)
+    ]
 
 
 def test_manager_name_is_pip(manager):

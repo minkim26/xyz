@@ -102,9 +102,30 @@ async def test_delete_returns_false_on_failure(manager, fake_subprocess):
     assert result == (False, "")
 
 
-async def test_check_orphans_stub_returns_empty(manager):
-    result = await manager.check_orphans()
-    assert result == []
+async def test_check_orphans_stub_returns_empty(manager, fake_subprocess):
+    tree = json.dumps({
+        "dependencies": {
+            "typescript": {
+                "version": "5.4.5",
+                "extraneous": True,
+            },
+            "eslint": {
+                "version": "8.57.0",
+                "dependencies": {
+                    "chalk": {
+                        "version": "5.3.0",
+                        "extraneous": True,
+                    }
+                },
+            },
+        }
+    })
+    with fake_subprocess("xyz.managers.npm", stdout=tree, returncode=1):
+        result = await manager.check_orphans()
+    assert result == [
+        Package(name="chalk", version="5.3.0", manager="npm", is_orphan=True),
+        Package(name="typescript", version="5.4.5", manager="npm", is_orphan=True),
+    ]
 
 
 def test_manager_name_is_npm(manager):
