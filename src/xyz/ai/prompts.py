@@ -68,6 +68,30 @@ Return ONLY a raw JSON array — no markdown fences, no explanation. Each elemen
 Return [] if nothing clearly meets the above criteria.\
 """
 
+CVE_PROMPT = """\
+You are a security researcher. Use Google Search to find known CVE \
+vulnerabilities for this package:
+
+Package: {name}
+Manager: {manager}
+Installed version: {version}
+
+Search NVD (nvd.nist.gov), OSV (osv.dev), and GitHub Security Advisories \
+for CVEs that affect version {version} of {name}.
+
+Return ONLY a raw JSON object — no markdown fences, no explanation:
+{{"severity": "none", "cve_ids": [], "summary": "..."}}
+
+Rules:
+- "severity" must be one of: "none" | "low" | "medium" | "high" | "critical"
+- Use the highest severity of any CVE that applies to version {version}
+- List only CVEs that actually affect this version (or a range including it)
+- "summary" should be 1-2 sentences: what the vulnerability is and whether \
+this version is affected
+- If no CVEs are found, use severity "none", empty cve_ids, and a summary \
+stating no known vulnerabilities were found\
+"""
+
 NL_SEARCH_PROMPT = """\
 You are a package search assistant. Given the following list of installed \
 package names:

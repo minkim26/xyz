@@ -52,7 +52,7 @@ from xyz.managers import Package, ManagerRegistry
 try:
     from xyz.ai import (
         stream_explain_package, stream_assess_orphan_risk,
-        natural_language_search, smart_cleanup,
+        natural_language_search, smart_cleanup, check_package_cves,
     )
 except ImportError:
     async def stream_explain_package(_name: str, _manager: str, _version: str):  # type: ignore[misc]
@@ -63,6 +63,8 @@ except ImportError:
         return []
     async def smart_cleanup(_packages: list) -> list:  # type: ignore[misc]
         return []
+    async def check_package_cves(_name: str, _manager: str, _version: str) -> dict:  # type: ignore[misc]
+        return {"severity": "unknown", "cve_ids": [], "summary": "AI unavailable."}
 
 
 # Breathing animation chars + matching Gemini-brand color gradient (blue→violet→fuchsia→back)
@@ -152,6 +154,11 @@ class DetailPane(Widget):
         height: auto;
         border-bottom: solid $surface;
     }
+    #dp-cve {
+        padding: 0 2;
+        height: auto;
+        border-bottom: solid $surface;
+    }
     #dp-ai {
         padding: 1 2;
         height: auto;
@@ -166,6 +173,7 @@ class DetailPane(Widget):
             yield Button("✕\nremove", id="btn-detail-remove", variant="error")
         with VerticalScroll(id="dp-ai-scroll"):
             yield Static("", id="dp-graph")
+            yield Static("", id="dp-cve")
             yield Static("", id="dp-ai")
 
     def on_mount(self) -> None:
@@ -175,11 +183,15 @@ class DetailPane(Widget):
         self.query_one("#dp-header", Static).update(f"[dim]{msg}[/dim]")
         self.query_one("#dp-meta", Static).update("")
         self.query_one("#dp-graph", Static).update("")
+        self.query_one("#dp-cve", Static).update("")
         self.query_one("#dp-ai", Static).update("")
         self.query_one("#dp-actions").display = False
 
     def show_graph(self, content: str) -> None:
         self.query_one("#dp-graph", Static).update(content)
+
+    def show_cve(self, content: str) -> None:
+        self.query_one("#dp-cve", Static).update(content)
 
     def show_package(
         self,
@@ -211,6 +223,9 @@ class DetailPane(Widget):
         if pkg.source:
             meta += f"\n[dim]source[/dim]  [dim]{pkg.source}[/dim]"
         self.query_one("#dp-meta", Static).update(meta)
+        self.query_one("#dp-cve", Static).update(
+            "[dim]s[/dim] [dim]→ scan for CVEs[/dim]"
+        )
 
         header = _gemini_header()
         if ai_text:
@@ -484,6 +499,7 @@ class XYZApp(App):
         Binding("o",      "toggle_orphans", "o orphans",     show=False),
         Binding("m",      "cycle_manager",  "m manager",     show=False),
         Binding("a",      "ask_ai",         "a AI",          show=False),
+        Binding("s",      "scan_cve",       "s CVE scan",    show=False),
         Binding("g",      "view_graph",     "g graph",       show=False),
         Binding("c",      "smart_cleanup",  "c cleanup",     show=False),
         Binding("/",      "focus_search",   "/ search",      show=False),
@@ -597,6 +613,7 @@ class XYZApp(App):
         self._spinner_frame: int = 0
         self._graph_task: Optional[asyncio.Task] = None
         self._current_graph_ascii: str = ""
+        self._cve_task: Optional[asyncio.Task] = None
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="search-row"):
@@ -609,7 +626,7 @@ class XYZApp(App):
             yield DetailPane(id="detail-pane")
         yield Static("", id="stats-bar")
         yield Static(
-            "↑↓ navigate   u update   d delete   a AI   g graph   o orphans   m manager   / search   ctrl+q quit",
+            "↑↓ navigate   u update   d delete   a AI   s CVE scan   g graph   o orphans   c cleanup   / search   ctrl+q quit",
             id="key-bar",
         )
 
@@ -722,6 +739,8 @@ class XYZApp(App):
             self._ai_task.cancel()
         if self._graph_task and not self._graph_task.done():
             self._graph_task.cancel()
+        if self._cve_task and not self._cve_task.done():
+            self._cve_task.cancel()
         self.query_one(DetailPane).show_package(pkg, self._dupe_names)
         self._graph_task = asyncio.create_task(self._fetch_graph(pkg))
 
@@ -889,6 +908,53 @@ class XYZApp(App):
         self.query_one(DetailPane).show_package(self._selected, self._dupe_names, ai_loading=True)
         self._start_ai_spinner()
         self._kick_ai(self._selected)
+
+    def action_scan_cve(self) -> None:
+        if not self._selected:
+            self.notify("No package selected.", severity="warning")
+            return
+        pkg = self._selected
+        if self._cve_task and not self._cve_task.done():
+            self._cve_task.cancel()
+        self.query_one(DetailPane).show_cve(
+            f"{_gemini_header()}  [dim]Scanning for CVEs…[/dim]"
+        )
+        self._cve_task = asyncio.create_task(self._fetch_cve(pkg))
+
+    async def _fetch_cve(self, pkg: Package) -> None:
+        try:
+            result = await check_package_cves(pkg.name, pkg.manager, pkg.version)
+        except asyncio.CancelledError:
+            return
+        except Exception as exc:
+            if self._selected and self._selected.name == pkg.name:
+                self.query_one(DetailPane).show_cve(f"[red]CVE scan error: {exc}[/red]")
+            return
+
+        if self._selected and self._selected.name != pkg.name:
+            return
+
+        severity = result.get("severity", "unknown")
+        cve_ids = result.get("cve_ids", [])
+        summary = result.get("summary", "")
+
+        severity_markup = {
+            "none":     "[bold green]✓ No known CVEs[/bold green]",
+            "low":      "[bold yellow]⚠ Low severity[/bold yellow]",
+            "medium":   "[bold yellow]⚠ Medium severity[/bold yellow]",
+            "high":     "[bold red]✘ High severity[/bold red]",
+            "critical": "[bold red]✘ CRITICAL[/bold red]",
+        }.get(severity, "[dim]Unknown[/dim]")
+
+        header = f"{_gemini_header()}  {severity_markup}"
+        cve_line = "  ".join(f"[dim]{c}[/dim]" for c in cve_ids) if cve_ids else ""
+        body = f"\n{cve_line}" if cve_line else ""
+        body += f"\n[dim]{summary}[/dim]" if summary else ""
+
+        try:
+            self.query_one(DetailPane).show_cve(header + body)
+        except Exception:
+            pass
 
     def action_toggle_orphans(self) -> None:
         self._orphan_only = not self._orphan_only

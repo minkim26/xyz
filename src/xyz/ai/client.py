@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 MODEL = "gemini-2.5-flash-lite"
+MODEL_SEARCH = "gemini-2.5-flash"  # search grounding requires the full Flash model (not lite)
 DEFAULT_TEMPERATURE = 0.3
 DEFAULT_MAX_TOKENS = 8192
 
@@ -189,4 +190,52 @@ class GeminiClient:
                 logger.error("Gemini auth error: %s", exc)
                 return "Invalid API key. Check your GEMINI_API_KEY environment variable."
             logger.exception("Gemini API error")
+            return f"AI request failed: {exc}"
+
+    async def generate_with_search(
+        self,
+        prompt: str,
+        *,
+        temperature: float = DEFAULT_TEMPERATURE,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+    ) -> str:
+        """Send a prompt to Gemini with Google Search grounding enabled.
+
+        Uses MODEL_SEARCH which is guaranteed to support search grounding.
+        Returns a user-friendly error string (never raises).
+        """
+        if not self.is_available:
+            return (
+                "AI features are offline.\n"
+                "Set the GEMINI_API_KEY environment variable to enable "
+                "security scanning."
+            )
+
+        if not self._check_rate_limit():
+            logger.warning("Local rate limit hit (preventing API call)")
+            return "Rate limit reached — please wait a moment before scanning."
+
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=MODEL_SEARCH,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=temperature,
+                    max_output_tokens=max_tokens,
+                    tools=[types.Tool(google_search=types.GoogleSearch())],
+                ),
+            )
+            text = response.text
+            if not text:
+                return "Gemini returned an empty response. Try again."
+            return text.strip()
+        except Exception as exc:
+            error_str = str(exc).lower()
+            if "rate limit" in error_str or "quota exceeded" in error_str or "429" in error_str:
+                logger.warning("Gemini rate limit hit: %s", exc)
+                return "Rate limit reached — please wait a moment and try again."
+            if "api key" in error_str or "401" in error_str or "403" in error_str:
+                logger.error("Gemini auth error: %s", exc)
+                return "Invalid API key. Check your GEMINI_API_KEY environment variable."
+            logger.exception("Gemini search API error")
             return f"AI request failed: {exc}"
