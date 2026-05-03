@@ -308,7 +308,7 @@ class XYZApp(App):
         Binding("g",      "view_graph",     "g graph",       show=False),
         Binding("/",      "focus_search",   "/ search",      show=False),
         Binding("escape", "blur_search",    "esc back",      show=False),
-        Binding("q",      "quit",           "q quit",        show=False),
+        Binding("ctrl+q", "quit",           "ctrl+q quit",   show=False),
     ]
 
     DEFAULT_CSS = """
@@ -429,7 +429,7 @@ class XYZApp(App):
             yield DetailPane(id="detail-pane")
         yield Static("", id="stats-bar")
         yield Static(
-            "↑↓ navigate   u update   d delete   a AI   g graph   o orphans   m manager   / search   q quit",
+            "↑↓ navigate   u update   d delete   a AI   g graph   o orphans   m manager   / search   ctrl+q quit",
             id="key-bar",
         )
 
