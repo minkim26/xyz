@@ -17,6 +17,7 @@ authors = [
 dependencies = [
     "textual>=3.0",
     "google-genai>=1.0",
+    "mermaid-ascii>=0.7.0",
 ]
 
 [project.scripts]

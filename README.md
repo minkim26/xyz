@@ -75,8 +75,10 @@ Current release auto-detects and integrates: `pip`, `brew`, and `npm`.
 
 ### Install (Users)
 
+XYZ inspects the packages available to your current Python environment. For most users, that means installing into your system or user site (not a virtual environment) so XYZ can see the same packages you want to clean up.
+
 ```bash
-pip install xyz-manager
+pip install --user xyz-manager
 ```
 
 ### Run
@@ -103,6 +105,25 @@ Without a key, XYZ runs in offline mode: package listing/search/filtering and pa
 ## Development Setup
 
 ### Clone and install
+
+#### Create an isolated environment
+
+For development, use a virtual environment so you do not pollute your system Python.
+
+**Option 1: venv**
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+```
+
+**Option 2: uv**
+
+```bash
+uv venv .venv
+source .venv/bin/activate
+```
 
 ```bash
 git clone https://github.com/minkim26/xyz.git
