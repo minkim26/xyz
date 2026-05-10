@@ -1,8 +1,10 @@
 # XYZ — Universal Dependency Manager
 
-<p align="center"><img src="assets/xyz-logo-dark.svg" width="100%" alt="XYZ logo"></p>
-
-
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/xyz-logo-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/xyz-logo-light.svg">
+  <img alt="Project Logo" src="assets/xyz-logo-dark.svg">
+</picture>
 
 > One terminal. Every package manager. No more context switching.
 
@@ -10,6 +12,8 @@
 ![Textual](https://img.shields.io/badge/TUI-Textual-6e40c9?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Status](https://img.shields.io/badge/Status-Hackathon%20MVP-orange)
+
+[Quick Start](#getting-started) · [Features](#features) · [Keybindings](#keybindings) · [Development](#development-setup) · [Roadmap](#roadmap)
 
 ---
 
@@ -23,11 +27,16 @@ Select an unfamiliar package and XYZ will tell you exactly what it is, why it's 
 
 ## Features
 
+### Highlights
+
 - **Unified package list** — aggregates installed packages from detected managers into one view
 - **Live search + manager filtering** — substring filtering, manager pills, and orphan-only toggle
 - **Natural language AI search** — prefix search with `?` (e.g., `?AI` or `?database`) to find packages by intent using Gemini
 - **Safe package actions** — update/delete with dry-run preview modal before confirmation
 - **Auto-refresh after actions** — package list re-scans after updates/deletes
+
+### Intelligence
+
 - **Orphan detection (non-AI)** — manager-native orphan checks for `pip`, `npm`, and `brew`
 - **AI package explainer (streaming)** — streamed Gemini explanations in the detail pane
 - **Smart cleanup recommendations** — Gemini-powered remove/review suggestions
