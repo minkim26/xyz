@@ -11,7 +11,6 @@
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
 ![Textual](https://img.shields.io/badge/TUI-Textual-6e40c9?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Status](https://img.shields.io/badge/Status-Hackathon%20MVP-orange)
 
 [Quick Start](#getting-started) · [Features](#features) · [Keybindings](#keybindings) · [Development](#development-setup) · [Roadmap](#roadmap)
 
@@ -135,7 +134,7 @@ source .venv/bin/activate
 ```
 
 ```bash
-git clone https://github.com/minkim26/xyz.git
+git clone https://github.com/xyz-tui/xyz.git
 cd xyz
 pip install -e .
 ```
@@ -193,4 +192,4 @@ MIT. See [LICENSE](LICENSE) for the full text.
 
 ---
 
-*Built at BeaverHacks · May 2nd, 2026*
+*Originally built at BeaverHacks (May 2nd, 2026), now actively maintained as an open-source project.*

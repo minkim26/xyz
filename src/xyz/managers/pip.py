@@ -5,7 +5,6 @@ import builtins
 import glob
 import json
 import os
-import shutil
 from datetime import datetime
 
 from .base import BaseManager, Package
@@ -25,7 +24,7 @@ class PipManager(BaseManager):
         import importlib.util
         return importlib.util.find_spec("pip") is not None
 
-    async def list(self) -> builtins.list[Package]:
+    async def list(self) -> builtins.list[Package]:  # type: ignore[valid-type]
         (list_out, _, rc), (show_out, _, _) = await asyncio.gather(
             run_command([*self._cmd, "list", "--format=json"]),
             run_command([*self._cmd, "show", "pip"]),

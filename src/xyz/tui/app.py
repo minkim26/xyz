@@ -6,6 +6,16 @@ import subprocess
 from collections import Counter
 from typing import Optional
 
+from textual import work
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.screen import ModalScreen
+from textual.widget import Widget
+from textual.widgets import Button, DataTable, Input, Label, Static
+
+from xyz.managers import Package, ManagerRegistry
+
 try:
     from mermaid_ascii import _resolve_binary as _mermaid_binary
     _MERMAID_BIN: str | None = _mermaid_binary()
@@ -14,7 +24,8 @@ except Exception:
 
 
 def _build_mermaid(name: str, requires: list[str], required_by: list[str]) -> str:
-    safe = lambda s: re.sub(r"[^a-zA-Z0-9]", "_", s)
+    def safe(s: str) -> str:
+        return re.sub(r"[^a-zA-Z0-9]", "_", s)
     lines = ["graph LR"]
     pkg = safe(name)
     for dep in requires:
@@ -38,16 +49,6 @@ async def _render_graph(mermaid_str: str) -> str:
     if result.returncode != 0:
         return f"[red]Mermaid Error:[/red]\n{result.stderr.decode('utf-8', errors='replace').strip()}"
     return result.stdout.decode("utf-8", errors="replace").strip()
-
-from textual import work
-from textual.app import App, ComposeResult
-from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
-from textual.widget import Widget
-from textual.widgets import Button, DataTable, Input, Label, Static
-
-from xyz.managers import Package, ManagerRegistry
 
 try:
     from xyz.ai import (

@@ -40,7 +40,7 @@ class BrewManager(BaseManager):
     def is_available(self) -> bool:
         return shutil.which("brew") is not None
 
-    async def list(self) -> builtins.list[Package]:
+    async def list(self) -> builtins.list[Package]:  # type: ignore[valid-type]
         stdout, _, returncode = await run_command(
             ["brew", "list", "--versions", "--formula"]
         )
