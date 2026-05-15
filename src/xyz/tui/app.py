@@ -4,7 +4,7 @@ import asyncio
 import re
 import subprocess
 from collections import Counter
-from typing import Optional, Sequence, Any
+from typing import Optional, Sequence, Any, AsyncGenerator
 
 from textual import work
 from textual.app import App, ComposeResult
@@ -56,15 +56,15 @@ try:
         natural_language_search, smart_cleanup, check_package_cves,
     )
 except ImportError:
-    async def stream_explain_package(_name: str, _manager: str, _version: str):  # type: ignore[misc]
+    async def stream_explain_package(name: str, manager: str, version: str) -> AsyncGenerator[str, None]:
         yield "AI unavailable — check GEMINI_API_KEY and dependencies."
-    async def stream_assess_orphan_risk(_name: str, _manager: str):  # type: ignore[misc]
+    async def stream_assess_orphan_risk(name: str, manager: str) -> AsyncGenerator[str, None]:
         yield "AI unavailable — check GEMINI_API_KEY and dependencies."
-    async def natural_language_search(_query: str, _package_names: list[str]) -> list[str]:  # type: ignore[misc]
+    async def natural_language_search(query: str, package_names: list[str]) -> list[str]:
         return []
-    async def smart_cleanup(_packages: list) -> list:  # type: ignore[misc]
+    async def smart_cleanup(packages: list[dict[str, Any]], dupe_names: set[str] | None = None) -> list[dict[str, Any]]:
         return []
-    async def check_package_cves(_name: str, _manager: str, _version: str) -> dict:  # type: ignore[misc]
+    async def check_package_cves(name: str, manager: str, version: str) -> dict[str, Any]:
         return {"severity": "unknown", "cve_ids": [], "summary": "AI unavailable."}
 
 
@@ -326,7 +326,7 @@ class ConfirmUpdateModal(ModalScreen[bool]):
 # Dependency graph modal
 # ---------------------------------------------------------------------------
 
-class GraphModal(ModalScreen):
+class GraphModal(ModalScreen[None]):
     DEFAULT_CSS = """
     GraphModal { align: center middle; }
     #graph-box {
@@ -361,7 +361,7 @@ class GraphModal(ModalScreen):
 # Smart cleanup — loading modal
 # ---------------------------------------------------------------------------
 
-class CleanupLoadingModal(ModalScreen):
+class CleanupLoadingModal(ModalScreen[None]):
     DEFAULT_CSS = """
     CleanupLoadingModal { align: center middle; }
     #cl-box {
@@ -405,7 +405,7 @@ class CleanupLoadingModal(ModalScreen):
 # Smart cleanup modal
 # ---------------------------------------------------------------------------
 
-class CleanupModal(ModalScreen):
+class CleanupModal(ModalScreen[dict[str, Any] | None]):
     DEFAULT_CSS = """
     CleanupModal { align: center middle; }
     #cleanup-box {
@@ -423,7 +423,7 @@ class CleanupModal(ModalScreen):
         Binding("escape,c", "dismiss_modal", show=False),
     ]
 
-    def __init__(self, recommendations: list[dict], total_scanned: int) -> None:
+    def __init__(self, recommendations: list[dict[str, Any]], total_scanned: int) -> None:
         super().__init__()
         self._recs = recommendations
         self._total = total_scanned
@@ -490,7 +490,7 @@ class CleanupModal(ModalScreen):
 # Main app
 # ---------------------------------------------------------------------------
 
-class XYZApp(App):
+class XYZApp(App[None]):
     TITLE = "xyz — dependency manager"
 
     BINDINGS = [
@@ -609,12 +609,12 @@ class XYZApp(App):
         self._orphan_only: bool = False
         self._manager_filter: Optional[str] = None
         self._managers: list[str] = []
-        self._ai_task: Optional[asyncio.Task] = None
+        self._ai_task: Optional[asyncio.Task[None]] = None
         self._spinner_timer: Any = None
         self._spinner_frame: int = 0
-        self._graph_task: Optional[asyncio.Task] = None
+        self._graph_task: Optional[asyncio.Task[None]] = None
         self._current_graph_ascii: str = ""
-        self._cve_task: Optional[asyncio.Task] = None
+        self._cve_task: Optional[asyncio.Task[None]] = None
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="search-row"):
@@ -1059,7 +1059,7 @@ class XYZApp(App):
         except Exception:
             pass
 
-        result: Optional[dict] = await self.push_screen_wait(CleanupModal(recs, len(self._all_packages)))
+        result: Optional[dict[str, Any]] = await self.push_screen_wait(CleanupModal(recs, len(self._all_packages)))
         if result is None:
             return
 
