@@ -6,9 +6,9 @@
 
 | Field | Value |
 |---|---|
-| Status | Draft |
-| Version | 0.2 |
-| Stage | Hackathon MVP |
+| Status | Active |
+| Version | 0.1.0 |
+| Stage | Open Source |
 | Hackathon | BeaverHacks |
 | Last Updated | May 2026 |
 
