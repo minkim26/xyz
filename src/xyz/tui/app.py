@@ -95,9 +95,9 @@ def _status_markup(pkg: Package, dupe_names: set[str]) -> str:
     if pkg.is_orphan:
         return "[bold red]orphan[/bold red]"
     if pkg.name in dupe_names:
-        return "[yellow]⚠ dupe[/yellow]"
-    return "[dim green]✓ ok[/dim green]"
+        return "[yellow]! dupe[/yellow]"
 
+    return "[dim green]ok[/dim green]"
 
 # ---------------------------------------------------------------------------
 # Detail pane
@@ -171,7 +171,7 @@ class DetailPane(Widget):
         yield Static("", id="dp-meta")
         with Horizontal(id="dp-actions"):
             yield Button("↑\nupdate", id="btn-detail-update", variant="primary")
-            yield Button("✕\nremove", id="btn-detail-remove", variant="error")
+            yield Button("X\nremove", id="btn-detail-remove", variant="error")
         with VerticalScroll(id="dp-ai-scroll"):
             yield Static("", id="dp-graph")
             yield Static("", id="dp-cve")
@@ -358,6 +358,72 @@ class GraphModal(ModalScreen[None]):
 
 
 # ---------------------------------------------------------------------------
+# Dashboard modal
+# ---------------------------------------------------------------------------
+
+class DashboardModal(ModalScreen[None]):
+    DEFAULT_CSS = """
+    DashboardModal { align: center middle; }
+    #dash-box {
+        width: 70; height: auto;
+        border: thick $primary; background: $surface; padding: 2 4;
+    }
+    #dash-title { text-align: center; text-style: bold; margin-bottom: 1; }
+    #dash-stats { width: 100%; }
+    #dash-hint { text-align: center; color: $text-muted; margin-top: 1; }
+    """
+
+    BINDINGS = [Binding("escape,d,D", "dismiss", show=False)]
+
+    def __init__(self, stats: dict[str, Any]) -> None:
+        super().__init__()
+        self._stats = stats
+
+    def compose(self) -> ComposeResult:
+        total = self._stats["total"]
+        by_manager = self._stats["by_manager"]
+        orphans = self._stats["orphans"]
+        managers = self._stats["managers_detected"]
+
+        mgr_parts = []
+        for mgr in sorted(by_manager.keys()):
+            count = by_manager[mgr]
+            color = _mgr_color(mgr)
+            mgr_parts.append(f"[{color}]{mgr}[/{color}]: {count}")
+
+        orphan_parts = []
+        for mgr in sorted(orphans.keys()):
+            count = orphans[mgr]
+            if count > 0:
+                color = _mgr_color(mgr)
+                orphan_parts.append(f"[{color}]{mgr}[/{color}]: {count}")
+
+        manager_status = "  ".join(
+            f"[green]+[/green] {mgr}" if mgr in managers else f"[red]x[/red] {mgr}"
+            for mgr in sorted(set(by_manager.keys()) | {"pip", "npm", "brew"})
+        )
+
+        stats_lines = [
+            "[bold]Package Statistics[/bold]",
+            f"[dim]{'─' * 30}[/dim]",
+            f"[bold]Total:[/bold] {total}",
+            f"[bold]By Manager:[/bold]  {'  '.join(mgr_parts)}",
+            "",
+            f"[bold]Orphans:[/bold]  {'  '.join(orphan_parts) if orphan_parts else '[dim]none[/dim]'}",
+            "",
+            f"[bold]Managers:[/bold]  {manager_status}",
+        ]
+
+        with Vertical(id="dash-box"):
+            yield Label("Package Statistics", id="dash-title")
+            yield Static("\n".join(stats_lines), id="dash-stats")
+            yield Label("[dim]D or ESC to close[/dim]", id="dash-hint")
+
+    async def action_dismiss(self, result: Any | None = None) -> None:
+        self.dismiss(result)
+
+
+# ---------------------------------------------------------------------------
 # Smart cleanup — loading modal
 # ---------------------------------------------------------------------------
 
@@ -436,7 +502,7 @@ class CleanupModal(ModalScreen[dict[str, Any] | None]):
             if not self._recs:
                 yield Static(
                     f"[dim]Analyzed {self._total} packages[/dim]\n\n"
-                    "[bold green]✓ Everything looks healthy — no cleanup needed.[/bold green]",
+                    "[bold green]Everything looks healthy - no cleanup needed.[/bold green]",
                     id="cleanup-summary",
                 )
                 yield Label("[dim]esc to close[/dim]", id="cleanup-hint")
@@ -460,7 +526,7 @@ class CleanupModal(ModalScreen[dict[str, Any] | None]):
         table.add_columns("VERDICT", "PACKAGE", "MANAGER", "REASON")
         for i, rec in enumerate(self._recs):
             verdict = rec.get("verdict", "review")
-            verdict_markup = "[red]● remove[/red]" if verdict == "remove" else "[yellow]⚠ review[/yellow]"
+            verdict_markup = "[red]-> remove[/red]" if verdict == "remove" else "[yellow]! review[/yellow]"
             color = _mgr_color(rec.get("manager", ""))
             table.add_row(
                 verdict_markup,
@@ -497,6 +563,7 @@ class XYZApp(App[None]):
         Binding("u",      "update_package", "u update",      show=False),
         Binding("d",      "delete_package", "d delete",      show=False),
         Binding("U",      "upgrade_all",    "U upgrade all", show=False),
+        Binding("D",      "toggle_dashboard", "D stats",    show=False),
         Binding("o",      "toggle_orphans", "o orphans",     show=False),
         Binding("m",      "cycle_manager",  "m manager",     show=False),
         Binding("a",      "ask_ai",         "a AI",          show=False),
@@ -727,6 +794,31 @@ class XYZApp(App[None]):
             f"{total} packages  ·  {mgrs} managers  ·  {orphans} orphans"
         )
 
+    def _compute_stats(self) -> dict[str, Any]:
+        total = len(self._all_packages)
+        by_manager: dict[str, int] = {}
+        orphans_by_manager: dict[str, int] = {}
+        managers_detected = list(self._managers)
+
+        for pkg in self._all_packages:
+            by_manager[pkg.manager] = by_manager.get(pkg.manager, 0) + 1
+            if pkg.is_orphan:
+                orphans_by_manager[pkg.manager] = orphans_by_manager.get(pkg.manager, 0) + 1
+
+        return {
+            "total": total,
+            "by_manager": by_manager,
+            "orphans": orphans_by_manager,
+            "managers_detected": managers_detected,
+        }
+
+    def action_toggle_dashboard(self) -> None:
+        if len(self.screen_stack) > 1:
+            self.pop_screen()
+        else:
+            stats = self._compute_stats()
+            self.push_screen(DashboardModal(stats))
+
     # ── selection ────────────────────────────────────────────────────────────
 
     def _select_row(self, row: int) -> None:
@@ -940,11 +1032,11 @@ class XYZApp(App[None]):
         summary = result.get("summary", "")
 
         severity_markup = {
-            "none":     "[bold green]✓ No known CVEs[/bold green]",
-            "low":      "[bold yellow]⚠ Low severity[/bold yellow]",
-            "medium":   "[bold yellow]⚠ Medium severity[/bold yellow]",
-            "high":     "[bold red]✘ High severity[/bold red]",
-            "critical": "[bold red]✘ CRITICAL[/bold red]",
+            "none":     "[bold green]No known CVEs[/bold green]",
+            "low":      "[bold yellow]! Low severity[/bold yellow]",
+            "medium":   "[bold yellow]! Medium severity[/bold yellow]",
+            "high":     "[bold red]X High severity[/bold red]",
+            "critical": "[bold red]X CRITICAL[/bold red]",
         }.get(severity, "[dim]Unknown[/dim]")
 
         header = f"{_gemini_header()}  {severity_markup}"
