@@ -8,13 +8,13 @@ import pytest
 
 
 @pytest.fixture
-def fake_subprocess():
+def fake_subprocess() -> Generator[contextmanager[AsyncMock], None, None]:
     """
     Returns a context-manager factory that patches run_command for a given module.
 
     Usage::
 
-        def test_something(fake_subprocess):
+        async def test_something(fake_subprocess):
             with fake_subprocess("xyz.managers.pip", stdout='[{"name":"pip","version":"23"}]'):
                 result = await manager.list()
     """

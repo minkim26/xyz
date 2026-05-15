@@ -11,7 +11,7 @@ def manager():
     return BrewManager()
 
 
-async def test_check_orphans_from_leaves_and_versions(manager, fake_subprocess):
+async def test_check_orphans_from_leaves_and_versions(manager, fake_subprocess) -> None:
     info_json = """{
       \"formulae\": [
         {\"name\": \"colima\", \"installed\": [{\"installed_as_dependency\": false, \"installed_on_request\": true}]},

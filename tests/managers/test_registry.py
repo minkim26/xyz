@@ -22,7 +22,7 @@ _PKG_A = Package(name="requests", version="2.31.0", manager="pip")
 _PKG_B = Package(name="typescript", version="5.4.5", manager="npm")
 
 
-async def test_registry_gathers_all_managers():
+async def test_registry_gathers_all_managers() -> None:
     registry = ManagerRegistry(managers=[
         _mock_manager([_PKG_A]),
         _mock_manager([_PKG_B]),
@@ -33,7 +33,7 @@ async def test_registry_gathers_all_managers():
     assert _PKG_B in packages
 
 
-async def test_registry_swallows_failed_manager():
+async def test_registry_swallows_failed_manager() -> None:
     registry = ManagerRegistry(managers=[
         _mock_manager(RuntimeError("pip not found")),
         _mock_manager([_PKG_B]),
@@ -42,7 +42,7 @@ async def test_registry_swallows_failed_manager():
     assert packages == [_PKG_B]
 
 
-async def test_registry_swallows_timeout():
+async def test_registry_swallows_timeout() -> None:
     async def slow_list() -> list[Package]:
         await asyncio.sleep(100)
         return []
@@ -55,13 +55,13 @@ async def test_registry_swallows_timeout():
     assert packages == []
 
 
-async def test_registry_empty_managers():
+async def test_registry_empty_managers() -> None:
     registry = ManagerRegistry(managers=[])
     packages = await registry.scan_all()
     assert packages == []
 
 
-async def test_registry_combines_packages_from_multiple_managers():
+async def test_registry_combines_packages_from_multiple_managers() -> None:
     pkg_c = Package(name="pip", version="23.0.1", manager="pip")
     registry = ManagerRegistry(managers=[
         _mock_manager([_PKG_A, pkg_c]),
@@ -71,7 +71,7 @@ async def test_registry_combines_packages_from_multiple_managers():
     assert len(packages) == 3
 
 
-async def test_registry_one_manager_fails_others_succeed():
+async def test_registry_one_manager_fails_others_succeed() -> None:
     registry = ManagerRegistry(managers=[
         _mock_manager(TimeoutError()),
         _mock_manager([_PKG_A]),
@@ -82,7 +82,7 @@ async def test_registry_one_manager_fails_others_succeed():
     assert sorted(p.name for p in packages) == ["requests", "typescript"]
 
 
-async def test_registry_marks_orphan_packages_from_manager_signal():
+async def test_registry_marks_orphan_packages_from_manager_signal() -> None:
     pip_pkg = Package(name="urllib3", version="2.2.1", manager="pip")
     npm_pkg = Package(name="eslint", version="8.57.0", manager="npm")
 
@@ -104,7 +104,7 @@ async def test_registry_marks_orphan_packages_from_manager_signal():
     assert by_key[("npm", "eslint")].is_orphan is False
 
 
-async def test_registry_keeps_list_when_orphan_check_times_out():
+async def test_registry_keeps_list_when_orphan_check_times_out() -> None:
     pkg = Package(name="colima", version="0.7.4", manager="brew")
 
     async def fast_list() -> list[Package]:
