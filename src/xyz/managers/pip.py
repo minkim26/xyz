@@ -76,12 +76,12 @@ class PipManager(BaseManager):
         stdout, stderr, code = await run_command([*self._cmd, "uninstall", "-y", name])
         return code == 0, f"{stdout}\n{stderr}".strip()
 
-    async def get_deps(self, name: str) -> tuple[list[str], list[str]]:
+    async def get_deps(self, name: str) -> tuple[builtins.list[str], builtins.list[str]]:
         stdout, _, rc = await run_command([*self._cmd, "show", name])
         if rc != 0:
             return [], []
-        requires: list[str] = []
-        required_by: list[str] = []
+        requires: builtins.list[str] = []
+        required_by: builtins.list[str] = []
         for line in stdout.splitlines():
             if line.startswith("Requires:"):
                 val = line.split(":", 1)[1].strip()
@@ -93,7 +93,7 @@ class PipManager(BaseManager):
 
     async def check_orphans(self) -> builtins.list[Package]:
         leaves_out, _, leaves_rc = await run_command(
-            [self._cmd, "list", "--not-required", "--format=json"]
+            [*self._cmd, "list", "--not-required", "--format=json"]
         )
         if leaves_rc != 0:
             return []
@@ -103,7 +103,7 @@ class PipManager(BaseManager):
         except (json.JSONDecodeError, TypeError):
             return []
 
-        inspect_out, _, inspect_rc = await run_command([self._cmd, "inspect", "--local"])
+        inspect_out, _, inspect_rc = await run_command([*self._cmd, "inspect", "--local"])
         if inspect_rc != 0:
             return []
 

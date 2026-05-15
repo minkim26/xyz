@@ -7,7 +7,7 @@ as an orphan (installed as a dependency but its parent was removed).
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, AsyncGenerator
 
 from xyz.ai.prompts import ORPHAN_RISK_PROMPT
 
@@ -57,7 +57,7 @@ async def stream_assess_orphan_risk(
     client: "GeminiClient",
     name: str,
     manager: str,
-):
+) -> AsyncGenerator[str, None]:
     """Stream an orphan risk assessment, yielding text chunks as they arrive.
 
     On a cache hit, yields the cached text as a single chunk.

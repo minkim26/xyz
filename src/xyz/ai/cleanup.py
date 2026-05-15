@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import json
 import logging
 import re
@@ -12,9 +14,9 @@ logger = logging.getLogger(__name__)
 
 async def smart_cleanup(
     client: GeminiClient,
-    packages: list[dict],
+    packages: list[dict[str, Any]],
     dupe_names: set[str] | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Analyze installed packages and return cleanup recommendations.
 
     Each recommendation dict has keys: name, manager, verdict, reason.

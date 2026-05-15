@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
+from typing import Optional, AsyncGenerator
 
 from google import genai
 from google.genai import types
@@ -103,13 +103,13 @@ class GeminiClient:
         *,
         temperature: float = DEFAULT_TEMPERATURE,
         max_tokens: int = DEFAULT_MAX_TOKENS,
-    ):
+    ) -> AsyncGenerator[str, None]:
         """Stream a prompt to Gemini, yielding text chunks as they arrive.
 
         Yields a single error string (never raises) so callers can always
         display something in the detail pane.
         """
-        if not self.is_available:
+        if not self.is_available or self._client is None:
             yield (
                 "AI features are offline.\n"
                 "Set the GEMINI_API_KEY environment variable to enable "
@@ -157,7 +157,7 @@ class GeminiClient:
         Returns a user-friendly error string (never raises) so the TUI
         can always display *something* in the detail pane.
         """
-        if not self.is_available:
+        if not self.is_available or self._client is None:
             return (
                 "AI features are offline.\n"
                 "Set the GEMINI_API_KEY environment variable to enable "
@@ -204,7 +204,7 @@ class GeminiClient:
         Uses MODEL_SEARCH which is guaranteed to support search grounding.
         Returns a user-friendly error string (never raises).
         """
-        if not self.is_available:
+        if not self.is_available or self._client is None:
             return (
                 "AI features are offline.\n"
                 "Set the GEMINI_API_KEY environment variable to enable "

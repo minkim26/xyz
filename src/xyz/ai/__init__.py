@@ -8,6 +8,8 @@ the shared :class:`GeminiClient` singleton automatically.
 
 from __future__ import annotations
 
+from typing import Any, AsyncGenerator
+
 from xyz.ai.client import GeminiClient
 from xyz.ai.cleanup import smart_cleanup as _cleanup
 from xyz.ai.cve import check_package_cves as _check_cves
@@ -48,21 +50,21 @@ async def natural_language_search(query: str, package_names: list[str]) -> list[
     return await _nl_search(client, query, package_names)
 
 
-async def stream_explain_package(name: str, manager: str, version: str):
+async def stream_explain_package(name: str, manager: str, version: str) -> AsyncGenerator[str, None]:
     """Stream a plain-English package explanation, yielding text chunks."""
     client = GeminiClient.get_instance()
     async for chunk in _stream_explain(client, name, manager, version):
         yield chunk
 
 
-async def stream_assess_orphan_risk(name: str, manager: str):
+async def stream_assess_orphan_risk(name: str, manager: str) -> AsyncGenerator[str, None]:
     """Stream an orphan risk assessment, yielding text chunks."""
     client = GeminiClient.get_instance()
     async for chunk in _stream_assess(client, name, manager):
         yield chunk
 
 
-async def smart_cleanup(packages: list[dict], dupe_names: set[str] | None = None) -> list[dict]:
+async def smart_cleanup(packages: list[dict[str, Any]], dupe_names: set[str] | None = None) -> list[dict[str, Any]]:
     """Analyze all installed packages and return cleanup recommendations.
 
     Each dict has: name, manager, verdict ("remove"|"review"), reason.
@@ -72,7 +74,7 @@ async def smart_cleanup(packages: list[dict], dupe_names: set[str] | None = None
     return await _cleanup(client, packages, dupe_names=dupe_names)
 
 
-async def check_package_cves(name: str, manager: str, version: str) -> dict:
+async def check_package_cves(name: str, manager: str, version: str) -> dict[str, Any]:
     """Check a package for known CVEs using Gemini with Google Search grounding.
 
     Returns a dict with keys:

@@ -82,7 +82,7 @@ class BrewManager(BaseManager):
         stdout, stderr, code = await run_command(cmd)
         return code == 0, f"{stdout}\n{stderr}".strip()
 
-    async def get_deps(self, name: str) -> tuple[list[str], list[str]]:
+    async def get_deps(self, name: str) -> tuple[builtins.list[str], builtins.list[str]]:
         import asyncio as _asyncio
         (deps_out, _, _), (uses_out, _, _) = await _asyncio.gather(
             run_command(["brew", "deps", name]),
@@ -128,7 +128,7 @@ class BrewManager(BaseManager):
                 for formula in info_data.get("formulae", []):
                     if not isinstance(formula, dict):
                         continue
-                    name = formula.get("name")
+                    name = str(formula.get("name") or "")
                     if not isinstance(name, str) or not name:
                         continue
                     installs = formula.get("installed")

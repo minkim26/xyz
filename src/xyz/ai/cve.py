@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from xyz.ai.prompts import CVE_PROMPT
 
@@ -19,15 +19,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Cache: (name, manager, version) -> result dict
-_cache: dict[tuple[str, str, str], dict] = {}
+# Cache: (name, manager, version) -> result dict[str, Any]
+_cache: dict[tuple[str, str, str], dict[str, Any]] = {}
 
 _ERROR_PREFIXES = ("AI features", "Gemini returned", "Rate limit", "Invalid API", "AI request")
 
 SEVERITY_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
 
-def _parse_response(text: str) -> dict:
+def _parse_response(text: str) -> dict[str, Any]:
     """Extract structured CVE data from Gemini's response text."""
     try:
         match = re.search(r"\{.*\}", text, re.DOTALL)
@@ -53,10 +53,10 @@ async def check_package_cves(
     name: str,
     manager: str,
     version: str,
-) -> dict:
+) -> dict[str, Any]:
     """Check a package for known CVEs using Gemini with Google Search grounding.
 
-    Returns a dict with keys:
+    Returns a dict[str, Any] with keys:
         severity  -- "none" | "low" | "medium" | "high" | "critical" | "unknown"
         cve_ids   -- list of CVE ID strings (may be empty)
         summary   -- human-readable sentence about findings

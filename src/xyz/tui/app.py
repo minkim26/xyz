@@ -4,7 +4,7 @@ import asyncio
 import re
 import subprocess
 from collections import Counter
-from typing import Optional
+from typing import Optional, Sequence, Any
 
 from textual import work
 from textual.app import App, ComposeResult
@@ -353,8 +353,8 @@ class GraphModal(ModalScreen):
                 yield Static(self._ascii_art, id="graph-content")
             yield Label("[dim]esc / g to close[/dim]", id="graph-hint")
 
-    def action_dismiss(self) -> None:
-        self.dismiss()
+    async def action_dismiss(self, result: Any | None = None) -> None:
+        self.dismiss(result)
 
 
 # ---------------------------------------------------------------------------
@@ -603,14 +603,14 @@ class XYZApp(App):
         super().__init__()
         self._managers_registry = ManagerRegistry()
         self._all_packages: list[Package] = []
-        self._display_rows: list[Package | None] = []
+        self._display_rows: Sequence[Package | None] = []
         self._dupe_names: set[str] = set()
         self._selected: Optional[Package] = None
         self._orphan_only: bool = False
         self._manager_filter: Optional[str] = None
         self._managers: list[str] = []
         self._ai_task: Optional[asyncio.Task] = None
-        self._spinner_timer = None
+        self._spinner_timer: Any = None
         self._spinner_frame: int = 0
         self._graph_task: Optional[asyncio.Task] = None
         self._current_graph_ascii: str = ""

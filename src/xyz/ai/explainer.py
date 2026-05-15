@@ -7,7 +7,7 @@ explain what it does, why it's installed, and whether it's safe to remove.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, AsyncGenerator
 
 from xyz.ai.prompts import EXPLAIN_PROMPT
 
@@ -63,7 +63,7 @@ async def stream_explain_package(
     name: str,
     manager: str,
     version: str = "unknown",
-):
+) -> AsyncGenerator[str, None]:
     """Stream a plain-English explanation, yielding text chunks as they arrive.
 
     On a cache hit, yields the cached text as a single chunk so the caller
