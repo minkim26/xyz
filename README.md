@@ -8,11 +8,13 @@
 
 > One terminal. Every package manager. No more context switching.
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
-![Textual](https://img.shields.io/badge/TUI-Textual-6e40c9?logo=python&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![TUI](https://img.shields.io/badge/TUI-Textual-6e40c9?logo=python&logoColor=white)](https://textual.textualize.io/)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/xyz-manager?color=blue)](https://pypi.org/project/xyz-manager/)
+[![CI](https://img.shields.io/github/actions/workflow/status/xyz-tui/xyz/ci.yml?branch=main)](https://github.com/xyz-tui/xyz/actions)
 
-[Quick Start](#getting-started) · [Features](#features) · [Keybindings](#keybindings) · [Development](#development-setup) · [Roadmap](#roadmap)
+[Quick Start](#getting-started) · [Features](#features) · [Keybindings](#keybindings) · [Development](#development-setup) · [Contributing](CONTRIBUTING.md)
 
 ---
 
@@ -46,26 +48,28 @@ Select an unfamiliar package and XYZ will tell you exactly what it is, why it's 
 
 ## Keybindings
 
-- `↑/↓` — navigate package list
-- `u` — update selected package
-- `d` — delete selected package
-- `U` — upgrade-all placeholder (notification only; bulk upgrade execution not yet implemented)
-- `a` — fetch AI explanation
-- `s` — scan selected package for CVEs
-- `g` — view dependency graph
-- `o` — toggle orphan packages filter
-- `m` — cycle manager filter
-- `c` — run smart cleanup analysis
-- `/` — focus search bar (prefix search with `?` for AI search)
-- `esc` — blur search or close modals
-- `ctrl+q` — quit
+| Key | Action |
+|-----|--------|
+| `↑/↓` | Navigate package list |
+| `u` | Update selected package |
+| `d` | Delete selected package |
+| `U` | Upgrade all outdated packages |
+| `a` | Fetch AI explanation |
+| `s` | Scan selected package for CVEs |
+| `g` | View dependency graph |
+| `o` | Toggle orphan packages filter |
+| `m` | Cycle manager filter |
+| `c` | Run smart cleanup analysis |
+| `/` | Focus search bar (prefix with `?` for AI search) |
+| `esc` | Blur search or close modals |
+| `ctrl+q` | Quit |
 
 ---
 
 ## Supported Package Managers
 
 | Manager | Platform |
-|---|---|
+|---------|----------|
 | `pip` | Python (all platforms) |
 | `brew` | macOS / Linux |
 | `npm` | Node.js (all platforms) |
@@ -93,11 +97,7 @@ pip install --user xyz-manager
 
 ```bash
 xyz
-```
-
-You can also run as a module:
-
-```bash
+# or
 python -m xyz
 ```
 
@@ -109,6 +109,8 @@ xyz
 ```
 
 Without a key, XYZ runs in offline mode: package listing/search/filtering and package actions remain available; AI features (AI search, explainer, smart cleanup, CVE scan) are disabled.
+
+---
 
 ## Development Setup
 
@@ -136,7 +138,7 @@ source .venv/bin/activate
 ```bash
 git clone https://github.com/xyz-tui/xyz.git
 cd xyz
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 ### Run locally
@@ -151,15 +153,19 @@ python -m xyz
 
 ```bash
 pytest
+ruff check src/ tests/
+mypy src/
 ```
+
+---
 
 ## Tech Stack
 
 | Layer | Technology |
-|---|---|
+|-------|------------|
 | Language | Python 3.10+ |
-| TUI Framework | [Textual](https://github.com/Textualize/textual) |
-| AI Integration | Google Gemini API |
+| TUI Framework | [Textual](https://textual.textualize.io/) |
+| AI Integration | [Google Gemini API](https://ai.google.dev/) |
 | Package parsing | Native subprocess calls per manager |
 | Distribution | pip / PyPI |
 
@@ -171,24 +177,29 @@ pytest
 - [ ] **v1.2** — CVE security overlay via OSV API
 - [ ] **v1.3** — Duplicate detection (same package across multiple managers)
 - [ ] **v1.4** — Audit trail with install-reason annotations
-- [ ] **v1.5** — Bulk upgrade execution for `U` (currently UI placeholder)
 - [ ] **Post-MVP** — expand manager coverage (`apt`, `pacman`, `bun`, `cargo`, `conda`, `pipx`, `gem`, `winget`)
 
 ---
 
-## Team
+## Contributing
 
-| Name | Email |
-|---|---|
-| Minsu Kim | kimminsu@oregonstate.edu |
-| Adithya Nair | nairadi@oregonstate.edu |
-| Ryan Shankar | shankary@oregonstate.edu |
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for our development workflow and coding standards.
 
 ---
 
 ## License
 
 MIT. See [LICENSE](LICENSE) for the full text.
+
+---
+
+## Team
+
+| Name | Role |
+|------|------|
+| [Minsu Kim](https://github.com/minkim26) | Maintainer |
+| [Adithya Nair](https://github.com/nairadi) | Contributor |
+| [Ryan Shankar](https://github.com/shankary) | Contributor |
 
 ---
 
