@@ -358,6 +358,72 @@ class GraphModal(ModalScreen[None]):
 
 
 # ---------------------------------------------------------------------------
+# Dashboard modal
+# ---------------------------------------------------------------------------
+
+class DashboardModal(ModalScreen[None]):
+    DEFAULT_CSS = """
+    DashboardModal { align: center middle; }
+    #dash-box {
+        width: 60; height: auto;
+        border: thick $primary; background: $surface; padding: 2 4;
+    }
+    #dash-title { text-align: center; text-style: bold; margin-bottom: 1; }
+    #dash-stats { width: 100%; }
+    #dash-hint { text-align: center; color: $text-muted; margin-top: 1; }
+    """
+
+    BINDINGS = [Binding("escape,d", "dismiss", show=False)]
+
+    def __init__(self, stats: dict[str, Any]) -> None:
+        super().__init__()
+        self._stats = stats
+
+    def compose(self) -> ComposeResult:
+        total = self._stats["total"]
+        by_manager = self._stats["by_manager"]
+        orphans = self._stats["orphans"]
+        managers = self._stats["managers_detected"]
+
+        mgr_parts = []
+        for mgr in sorted(by_manager.keys()):
+            count = by_manager[mgr]
+            color = _mgr_color(mgr)
+            mgr_parts.append(f"[{color}]{mgr}[/{color}]: {count}")
+
+        orphan_parts = []
+        for mgr in sorted(orphans.keys()):
+            count = orphans[mgr]
+            if count > 0:
+                color = _mgr_color(mgr)
+                orphan_parts.append(f"[{color}]{mgr}[/{color}]: {count}")
+
+        manager_status = "  ".join(
+            f"[green]✓[/green] {mgr}" if mgr in managers else f"[red]✗[/red] {mgr}"
+            for mgr in sorted(set(by_manager.keys()) | {"pip", "npm", "brew"})
+        )
+
+        stats_lines = [
+            "[bold]📊 Package Statistics[/bold]",
+            f"[dim]{'─' * 30}[/dim]",
+            f"[bold]Total:[/bold] {total}",
+            f"[bold]By Manager:[/bold]  {'  '.join(mgr_parts)}",
+            "",
+            f"[bold]⚠️  Orphans:[/bold]  {'  '.join(orphan_parts) if orphan_parts else '[dim]none[/dim]'}",
+            "",
+            f"[bold]🏗️  Managers:[/bold]  {manager_status}",
+        ]
+
+        with Vertical(id="dash-box"):
+            yield Label("Package Statistics", id="dash-title")
+            yield Static("\n".join(stats_lines), id="dash-stats")
+            yield Label("[dim]D or ESC to close[/dim]", id="dash-hint")
+
+    async def action_dismiss(self, result: Any | None = None) -> None:
+        self.dismiss(result)
+
+
+# ---------------------------------------------------------------------------
 # Smart cleanup — loading modal
 # ---------------------------------------------------------------------------
 
@@ -497,6 +563,7 @@ class XYZApp(App[None]):
         Binding("u",      "update_package", "u update",      show=False),
         Binding("d",      "delete_package", "d delete",      show=False),
         Binding("U",      "upgrade_all",    "U upgrade all", show=False),
+        Binding("D",      "toggle_dashboard", "D stats",    show=False),
         Binding("o",      "toggle_orphans", "o orphans",     show=False),
         Binding("m",      "cycle_manager",  "m manager",     show=False),
         Binding("a",      "ask_ai",         "a AI",          show=False),
@@ -726,6 +793,31 @@ class XYZApp(App[None]):
         self.query_one("#stats-bar", Static).update(
             f"{total} packages  ·  {mgrs} managers  ·  {orphans} orphans"
         )
+
+    def _compute_stats(self) -> dict[str, Any]:
+        total = len(self._all_packages)
+        by_manager: dict[str, int] = {}
+        orphans_by_manager: dict[str, int] = {}
+        managers_detected = list(self._managers)
+
+        for pkg in self._all_packages:
+            by_manager[pkg.manager] = by_manager.get(pkg.manager, 0) + 1
+            if pkg.is_orphan:
+                orphans_by_manager[pkg.manager] = orphans_by_manager.get(pkg.manager, 0) + 1
+
+        return {
+            "total": total,
+            "by_manager": by_manager,
+            "orphans": orphans_by_manager,
+            "managers_detected": managers_detected,
+        }
+
+    def action_toggle_dashboard(self) -> None:
+        if self.screen and isinstance(self.screen, DashboardModal):
+            self.pop_screen()
+        else:
+            stats = self._compute_stats()
+            self.push_screen(DashboardModal(stats))
 
     # ── selection ────────────────────────────────────────────────────────────
 
