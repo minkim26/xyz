@@ -95,9 +95,9 @@ def _status_markup(pkg: Package, dupe_names: set[str]) -> str:
     if pkg.is_orphan:
         return "[bold red]orphan[/bold red]"
     if pkg.name in dupe_names:
-        return "[yellow]⚠ dupe[/yellow]"
-    return "[dim green]✓ ok[/dim green]"
+        return "[yellow]! dupe[/yellow]"
 
+    return "[dim green]ok[/dim green]"
 
 # ---------------------------------------------------------------------------
 # Detail pane
@@ -171,7 +171,7 @@ class DetailPane(Widget):
         yield Static("", id="dp-meta")
         with Horizontal(id="dp-actions"):
             yield Button("↑\nupdate", id="btn-detail-update", variant="primary")
-            yield Button("✕\nremove", id="btn-detail-remove", variant="error")
+            yield Button("X\nremove", id="btn-detail-remove", variant="error")
         with VerticalScroll(id="dp-ai-scroll"):
             yield Static("", id="dp-graph")
             yield Static("", id="dp-cve")
@@ -365,7 +365,7 @@ class DashboardModal(ModalScreen[None]):
     DEFAULT_CSS = """
     DashboardModal { align: center middle; }
     #dash-box {
-        width: 60; height: auto;
+        width: 70; height: auto;
         border: thick $primary; background: $surface; padding: 2 4;
     }
     #dash-title { text-align: center; text-style: bold; margin-bottom: 1; }
@@ -373,7 +373,7 @@ class DashboardModal(ModalScreen[None]):
     #dash-hint { text-align: center; color: $text-muted; margin-top: 1; }
     """
 
-    BINDINGS = [Binding("escape,d", "dismiss", show=False)]
+    BINDINGS = [Binding("escape,d,D", "dismiss", show=False)]
 
     def __init__(self, stats: dict[str, Any]) -> None:
         super().__init__()
@@ -399,19 +399,19 @@ class DashboardModal(ModalScreen[None]):
                 orphan_parts.append(f"[{color}]{mgr}[/{color}]: {count}")
 
         manager_status = "  ".join(
-            f"[green]✓[/green] {mgr}" if mgr in managers else f"[red]✗[/red] {mgr}"
+            f"[green]+[/green] {mgr}" if mgr in managers else f"[red]x[/red] {mgr}"
             for mgr in sorted(set(by_manager.keys()) | {"pip", "npm", "brew"})
         )
 
         stats_lines = [
-            "[bold]📊 Package Statistics[/bold]",
+            "[bold]Package Statistics[/bold]",
             f"[dim]{'─' * 30}[/dim]",
             f"[bold]Total:[/bold] {total}",
             f"[bold]By Manager:[/bold]  {'  '.join(mgr_parts)}",
             "",
-            f"[bold]⚠️  Orphans:[/bold]  {'  '.join(orphan_parts) if orphan_parts else '[dim]none[/dim]'}",
+            f"[bold]Orphans:[/bold]  {'  '.join(orphan_parts) if orphan_parts else '[dim]none[/dim]'}",
             "",
-            f"[bold]🏗️  Managers:[/bold]  {manager_status}",
+            f"[bold]Managers:[/bold]  {manager_status}",
         ]
 
         with Vertical(id="dash-box"):
@@ -502,7 +502,7 @@ class CleanupModal(ModalScreen[dict[str, Any] | None]):
             if not self._recs:
                 yield Static(
                     f"[dim]Analyzed {self._total} packages[/dim]\n\n"
-                    "[bold green]✓ Everything looks healthy — no cleanup needed.[/bold green]",
+                    "[bold green]Everything looks healthy - no cleanup needed.[/bold green]",
                     id="cleanup-summary",
                 )
                 yield Label("[dim]esc to close[/dim]", id="cleanup-hint")
@@ -526,7 +526,7 @@ class CleanupModal(ModalScreen[dict[str, Any] | None]):
         table.add_columns("VERDICT", "PACKAGE", "MANAGER", "REASON")
         for i, rec in enumerate(self._recs):
             verdict = rec.get("verdict", "review")
-            verdict_markup = "[red]● remove[/red]" if verdict == "remove" else "[yellow]⚠ review[/yellow]"
+            verdict_markup = "[red]-> remove[/red]" if verdict == "remove" else "[yellow]! review[/yellow]"
             color = _mgr_color(rec.get("manager", ""))
             table.add_row(
                 verdict_markup,
@@ -813,7 +813,7 @@ class XYZApp(App[None]):
         }
 
     def action_toggle_dashboard(self) -> None:
-        if self.screen and isinstance(self.screen, DashboardModal):
+        if len(self.screen_stack) > 1:
             self.pop_screen()
         else:
             stats = self._compute_stats()
@@ -1032,11 +1032,11 @@ class XYZApp(App[None]):
         summary = result.get("summary", "")
 
         severity_markup = {
-            "none":     "[bold green]✓ No known CVEs[/bold green]",
-            "low":      "[bold yellow]⚠ Low severity[/bold yellow]",
-            "medium":   "[bold yellow]⚠ Medium severity[/bold yellow]",
-            "high":     "[bold red]✘ High severity[/bold red]",
-            "critical": "[bold red]✘ CRITICAL[/bold red]",
+            "none":     "[bold green]No known CVEs[/bold green]",
+            "low":      "[bold yellow]! Low severity[/bold yellow]",
+            "medium":   "[bold yellow]! Medium severity[/bold yellow]",
+            "high":     "[bold red]X High severity[/bold red]",
+            "critical": "[bold red]X CRITICAL[/bold red]",
         }.get(severity, "[dim]Unknown[/dim]")
 
         header = f"{_gemini_header()}  {severity_markup}"
